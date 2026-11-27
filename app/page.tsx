@@ -3,30 +3,64 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
+import {
+  DEFAULT_LOCALE,
+  LOCALES,
+  LOCALE_NAMES,
+  LOCALE_TAGS,
+  type Locale,
+  MESSAGES,
+  detectLocale,
+  isLocale,
+} from "./i18n";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 // "chat": 通常の行政相談 / "support": 使える支援制度を探す（AI インタビュー）
 type Mode = "chat" | "support";
 
-const SUPPORT_START = "使える支援制度を探したいです。";
-
-const EXAMPLE_QUESTIONS = [
-  "住民票の取り方を教えてください",
-  "マイナンバーカードをなくしたときはどうすればいいですか？",
-  "引っ越しのときに必要な手続きを教えてください",
-];
+// 手動で選んだ表示言語を保存するキー
+const LOCALE_STORAGE_KEY = "mirai-gbot-locale";
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
+  const [locale, setLocale] = useState<Locale>(DEFAULT_LOCALE);
+  const t = MESSAGES[locale];
   const bottomRef = useRef<HTMLDivElement>(null);
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
   const speech = useSpeechRecognition((transcript) => {
     setInput(voiceBaseRef.current + transcript);
-  });
+  }, LOCALE_TAGS[locale]);
+
+  // 初期言語: 手動で選んだ言語 → ブラウザの言語設定 → 日本語。
+  // SSR とのハイドレーション不一致を避けるため、マウント後に決める。
+  useEffect(() => {
+    let saved: string | null = null;
+    try {
+      saved = localStorage.getItem(LOCALE_STORAGE_KEY);
+    } catch {
+      // localStorage が使えない環境（プライベートモード等）は無視する
+    }
+    setLocale(isLocale(saved) ? saved : detectLocale(navigator.languages ?? [navigator.language]));
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.lang = locale;
+  }, [locale]);
+
+  function changeLocale(value: string) {
+    if (!isLocale(value)) return;
+    speech.cancel();
+    setLocale(value);
+    try {
+      localStorage.setItem(LOCALE_STORAGE_KEY, value);
+    } catch {
+      // 保存できなくても切り替え自体は行う
+    }
+  }
 
   function toggleVoiceInput() {
     if (speech.listening) {
@@ -50,7 +84,7 @@ export default function Home() {
   function startSupport() {
     if (loading) return;
     setMode("support");
-    send(SUPPORT_START, [], "support");
+    send(t.supportStart, [], "support");
   }
 
   function resetChat() {
@@ -80,11 +114,20 @@ export default function Home() {
         body: JSON.stringify({
           messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
           mode: currentMode,
+          locale,
         }),
       });
 
       if (!res.ok || !res.body) {
-        throw new Error(await res.text());
+        const detail = await res.text().catch(() => "");
+        // サーバーのエラーメッセージは日本語なので、日本語以外では表示言語の汎用メッセージにする
+        throw new Error(
+          locale === "ja" && detail
+            ? detail
+            : res.status === 429
+              ? t.errorBusy
+              : t.errorGeneric,
+        );
       }
 
       const reader = res.body.getReader();
@@ -97,7 +140,7 @@ export default function Home() {
         setMessages([...history, { role: "assistant", content: reply }]);
       }
     } catch (err) {
-      const msg = err instanceof Error && err.message ? err.message : "エラーが発生しました。";
+      const msg = err instanceof Error && err.message ? err.message : t.errorGeneric;
       setMessages([...history, { role: "assistant", content: msg, error: true }]);
     } finally {
       setLoading(false);
@@ -110,36 +153,50 @@ export default function Home() {
         <div className="header-inner">
           <h1 className="header-title">mirai-gbot</h1>
           {mode === "support" ? (
-            <span className="mode-badge">支援制度を探す</span>
+            <span className="mode-badge">{t.supportBadge}</span>
           ) : (
-            <p className="header-description">
-              行政手続きや公的制度についての疑問に答える、行政相談用のチャットボットです。
-            </p>
+            <p className="header-description">{t.description}</p>
           )}
-          {messages.length > 0 && (
-            <button
-              type="button"
-              className="header-button"
-              onClick={resetChat}
-              disabled={loading}
+          <div className="header-actions">
+            <label htmlFor="locale-select" className="visually-hidden">
+              {t.language}
+            </label>
+            <select
+              id="locale-select"
+              className="locale-select"
+              value={locale}
+              onChange={(e) => changeLocale(e.target.value)}
+              title={t.language}
             >
-              最初に戻る
-            </button>
-          )}
+              {LOCALES.map((l) => (
+                <option key={l} value={l} lang={l}>
+                  {LOCALE_NAMES[l]}
+                </option>
+              ))}
+            </select>
+            {messages.length > 0 && (
+              <button
+                type="button"
+                className="header-button"
+                onClick={resetChat}
+                disabled={loading}
+              >
+                {t.reset}
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
-      <section className="messages" aria-label="会話">
+      <section className="messages" aria-label={t.conversation}>
         <div className="messages-inner" aria-live="polite">
           {messages.length === 0 && (
             <div className="empty">
-              <p>行政手続きや公的制度について、お気軽にご相談ください。</p>
-              <p>
-                マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
-              </p>
-              <p className="empty-sub">例えば、こんな質問ができます。</p>
+              <p>{t.welcome}</p>
+              <p>{t.privacy}</p>
+              <p className="empty-sub">{t.examplesLead}</p>
               <div className="examples">
-                {EXAMPLE_QUESTIONS.map((q) => (
+                {t.examples.map((q) => (
                   <button
                     key={q}
                     type="button"
@@ -152,11 +209,9 @@ export default function Home() {
                 ))}
               </div>
               <button type="button" className="mode-button" onClick={startSupport}>
-                使える支援制度を探す
+                {t.supportButton}
               </button>
-              <p className="note">
-                いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。
-              </p>
+              <p className="note">{t.supportNote}</p>
             </div>
           )}
           {messages.map((m, i) => (
@@ -170,14 +225,14 @@ export default function Home() {
               )}
               <div className="message-body">
                 <span className="message-label">
-                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+                  {m.role === "user" ? t.you : m.error ? t.error : "mirai-gbot"}
                 </span>
                 <div className="bubble" role={m.error ? "alert" : undefined}>
                   {m.role === "assistant" && m.content && !m.error ? (
                     <Markdown text={m.content} />
                   ) : (
                     m.content ||
-                    (loading ? <span className="typing">回答を作成中…</span> : "")
+                    (loading ? <span className="typing">{t.typing}</span> : "")
                   )}
                 </div>
               </div>
@@ -190,7 +245,7 @@ export default function Home() {
       <form className="composer" onSubmit={handleSubmit}>
         <div className="composer-inner">
           <label htmlFor="message-input" className="visually-hidden">
-            メッセージ
+            {t.inputLabel}
           </label>
           <input
             id="message-input"
@@ -199,10 +254,10 @@ export default function Home() {
             onChange={(e) => setInput(e.target.value)}
             placeholder={
               speech.listening
-                ? "お話しください…"
+                ? t.placeholderListening
                 : mode === "support"
-                  ? "状況を入力（個人情報は不要です）"
-                  : "メッセージを入力"
+                  ? t.placeholderSupport
+                  : t.placeholder
             }
             disabled={loading}
             autoComplete="off"
@@ -215,9 +270,9 @@ export default function Home() {
               className={`mic${speech.listening ? " listening" : ""}`}
               onClick={toggleVoiceInput}
               disabled={loading}
-              aria-label={speech.listening ? "音声入力を停止" : "音声で入力"}
+              aria-label={speech.listening ? t.micStop : t.micStart}
               aria-pressed={speech.listening}
-              title={speech.listening ? "音声入力を停止" : "音声で入力"}
+              title={speech.listening ? t.micStop : t.micStart}
             >
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
                 <path
@@ -232,13 +287,13 @@ export default function Home() {
             className="button-primary"
             disabled={loading || !input.trim()}
           >
-            送信
+            {t.send}
           </button>
         </div>
       </form>
       {speech.error && (
         <p className="voice-error" role="alert">
-          {speech.error}
+          {t.speechErrors[speech.error]}
         </p>
       )}
     </main>

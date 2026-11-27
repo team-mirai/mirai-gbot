@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { SpeechErrorCode } from "./i18n";
 
 // Web Speech API の最小限の型定義（TypeScript の DOM 型には含まれないため）
 type SpeechRecognitionAlternativeLike = { transcript: string };
@@ -41,22 +42,23 @@ function getSpeechRecognition(): SpeechRecognitionCtor | null {
   return w.SpeechRecognition ?? w.webkitSpeechRecognition ?? null;
 }
 
-const ERROR_MESSAGES: Record<string, string> = {
-  "not-allowed": "マイクの使用が許可されていません。ブラウザの設定を確認してください。",
-  "service-not-allowed": "このブラウザでは音声入力を利用できません。",
-  "audio-capture": "マイクが見つかりません。",
-  network: "音声認識サービスに接続できませんでした。",
-};
+const KNOWN_ERRORS: readonly SpeechErrorCode[] = [
+  "not-allowed",
+  "service-not-allowed",
+  "audio-capture",
+  "network",
+];
 
 /**
- * ブラウザの Web Speech API による日本語の音声入力。
+ * ブラウザの Web Speech API による音声入力。lang は認識する言語（BCP 47。例: "ja-JP"）。
  * onTranscript には認識途中のテキストも含めて、発話開始からの全文が渡される。
+ * error は表示言語に合わせて呼び出し側で文言にする。
  */
-export function useSpeechRecognition(onTranscript: (text: string) => void) {
+export function useSpeechRecognition(onTranscript: (text: string) => void, lang = "ja-JP") {
   // SSR とのハイドレーション不一致を避けるため、対応判定はマウント後に行う
   const [supported, setSupported] = useState(false);
   const [listening, setListening] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<SpeechErrorCode | null>(null);
   const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
   const onTranscriptRef = useRef(onTranscript);
   onTranscriptRef.current = onTranscript;
@@ -71,7 +73,7 @@ export function useSpeechRecognition(onTranscript: (text: string) => void) {
     if (!Ctor || recognitionRef.current) return;
 
     const recognition = new Ctor();
-    recognition.lang = "ja-JP";
+    recognition.lang = lang;
     recognition.continuous = false;
     recognition.interimResults = true;
 
@@ -85,7 +87,11 @@ export function useSpeechRecognition(onTranscript: (text: string) => void) {
     recognition.onerror = (e) => {
       // 無音・ユーザーによる中断はエラー表示しない
       if (e.error === "no-speech" || e.error === "aborted") return;
-      setError(ERROR_MESSAGES[e.error] ?? "音声入力でエラーが発生しました。");
+      setError(
+        (KNOWN_ERRORS as readonly string[]).includes(e.error)
+          ? (e.error as SpeechErrorCode)
+          : "unknown",
+      );
     };
     recognition.onend = () => {
       recognitionRef.current = null;
@@ -98,9 +104,9 @@ export function useSpeechRecognition(onTranscript: (text: string) => void) {
       recognitionRef.current = recognition;
       setListening(true);
     } catch {
-      setError("音声入力を開始できませんでした。");
+      setError("start-failed");
     }
-  }, []);
+  }, [lang]);
 
   const stop = useCallback(() => {
     recognitionRef.current?.stop();

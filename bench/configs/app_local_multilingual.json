@@ -1,0 +1,14 @@
+{
+  "name": "app-local-multilingual",
+  "description": "ローカルで起動した G ボット本体に英語・中国語・韓国語・ベトナム語・ポルトガル語で質問し、同じ言語で正しく答え、外国人向け窓口を案内できるかを測る",
+  "questions": "questions/multilingual.jsonl",
+  "target": {
+    "type": "http",
+    "url": "http://localhost:3000/api/chat",
+    "body_template": { "messages": [ { "role": "user", "content": "{{question}}" } ] },
+    "answer_path": "answer",
+    "citations_path": "citations",
+    "timeout": 300
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}

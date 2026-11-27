@@ -24,10 +24,12 @@ http://localhost:3000 を開きます。
 ## 構成
 
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）
-- `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による日本語の音声入力。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
+- `app/i18n.ts` — 画面の文言の辞書（日本語・英語・中国語・韓国語・ベトナム語・ポルトガル語）。初期言語はブラウザの言語設定から決まり、ヘッダーの言語メニューで切り替えられます（選んだ言語は localStorage に保存）。言語を追加するときは `LOCALES` と `MESSAGES` に足します
+- `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による音声入力（画面の表示言語で認識）。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
 - 支援制度を探す（AI インタビュー）: 最初の画面の「使える支援制度を探す」ボタンで開始。ボットが困りごと・世帯構成・市区町村・収入の目安などを一問ずつ聞き取り、利用できそうな給付・手当・減免・貸付・相談窓口を、申請先・期限・出典つきで一覧表示します。氏名や詳しい住所などの個人情報は聞きません。API には `mode: "support"` を付けて送り、専用のシステムプロンプトに切り替えます
+- 多言語: 回答はユーザーが質問した言語で返します（判別しにくい短い発言は画面の表示言語）。API には `locale`（`ja` / `en` / `zh` / `ko` / `vi` / `pt`）を付けて送ります。日本語以外の相談や在留資格に関わる相談では、外国人在留支援センター（FRESC）などの外国人向け窓口も案内します。確認用のベンチマークは `bench/configs/app_local_multilingual.json`
 - Web 検索: OpenRouter の web プラグインで最新情報を検索した上で回答します。検索対象は政府・自治体の公式ドメイン（`go.jp` / `lg.jp` とそのサブドメイン）だけに限定しており、それ以外のサイトは検索・出典表示の対象になりません。対象ドメインは `SEARCH_ALLOWED_DOMAINS`（カンマ区切り）で変更できます。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
 
 ## セキュリティ

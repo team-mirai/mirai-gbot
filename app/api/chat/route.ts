@@ -7,6 +7,7 @@ import {
   rateLimit,
   safeCitationUrl,
 } from "./guard";
+import { DEFAULT_LOCALE, LOCALE_NAMES, type Locale, MESSAGES, isLocale } from "../../i18n";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -67,6 +68,15 @@ function todayJst() {
   });
 }
 
+// 回答する言語の指示。ユーザーの発言の言語を最優先し、判別しにくいときだけ画面の表示言語を使う。
+function languageRule(locale: Locale) {
+  return `回答は必ずユーザーの最新の発言と同じ言語で書いてください（日本語以外で質問されたら、その言語で答える）。言語が判別しにくい短い発言のときは、画面の表示言語（${LOCALE_NAMES[locale]}）で答えてください。日本語以外で答えるときも、制度名・窓口名は日本語の正式名称を括弧で併記すると、窓口で伝えやすくなります。`;
+}
+
+// 日本に住む外国人の方向けの相談窓口（外国語で相談された場合や、在留資格に関わる相談で案内する）
+const FOREIGN_RESIDENT_DESKS =
+  "ユーザーが日本語以外で相談している場合や、在留資格・ビザ・外国人の生活に関わる相談の場合は、必要に応じて外国人向けの窓口も案内してください: 外国人在留支援センター（FRESC、東京・四谷。在留・雇用・法律などの相談窓口が集まる）、外国人在留総合インフォメーションセンター（出入国在留管理庁。在留手続きの多言語相談）、住んでいる都道府県・市区町村の外国人相談窓口（一元的相談窓口）や国際交流協会、法テラスの多言語情報提供サービス、よりそいホットラインの外国語相談。電話番号・対応言語・受付時間は最新情報で確認してから示してください。";
+
 function scopeRules() {
   return [
     "対応範囲は行政に関する相談です（行政手続き・届出・申請、公的制度や給付・補助金、税金・年金・保険・福祉、行政機関の窓口や連絡先、行政サービスへの苦情や要望など）。",
@@ -74,15 +84,17 @@ function scopeRules() {
   ];
 }
 
-function chatPrompt() {
+function chatPrompt(locale: Locale) {
   return [
     "あなたは行政相談用のチャットボットです。親切かつ簡潔に、ユーザーと同じ言語で答えてください。",
+    languageRule(locale),
     ...scopeRules(),
+    FOREIGN_RESIDENT_DESKS,
     "挨拶や、このチャットボット自身（名前・目的・運営者・利用料・できること・使い方）についての質問は対応範囲内です。下の自己紹介情報をもとに短く答えたうえで行政相談を促してください。行政と関係があるか判断に迷う場合は、行政に関わる部分について答えてください。",
     BOT_PROFILE,
     `今日は ${todayJst()}（日本時間）です。`,
     "これはチャットです。人と会話するように、短く自然に返してください。",
-    "- 1回の返答は基本 2〜4 文（日本語なら 200 字程度まで）。まず結論を一言で。",
+    "- 1回の返答は基本 2〜4 文（日本語なら 200 字程度まで、他の言語でも同程度の分量）。まず結論を一言で。",
     "- 見出し（#）、表、長い箇条書き、太字の多用はしない。箇条書きが必要なときも 3 項目まで。",
     "- 全部を一度に説明しようとせず、要点だけ答えて、必要なら「〇〇についても詳しく話しましょうか？」と続きを聞く。",
     "- ユーザーが詳しい説明・一覧・手順などを明示的に求めたときだけ、長めに答えてよい。",
@@ -93,9 +105,10 @@ function chatPrompt() {
   ];
 }
 
-function supportPrompt() {
+function supportPrompt(locale: Locale) {
   return [
     "あなたは行政相談用のチャットボットで、今は「使える支援制度を探す」モードです。困っている方の状況を一問ずつ聞き取り、利用できそうな公的支援（給付・手当・減免・貸付・相談窓口）を案内します。ユーザーと同じ言語で、やさしく、責めない口調で話してください。",
+    languageRule(locale),
     ...scopeRules(),
     `今日は ${todayJst()}（日本時間）です。年度や申請期限はこの日付を基準に判断してください。`,
     "## 聞き取り（インタビュー）",
@@ -117,6 +130,7 @@ function supportPrompt() {
     "- ひとり親: 児童扶養手当、児童手当、ひとり親家庭等医療費助成、就学援助、母子父子寡婦福祉資金貸付金、高等職業訓練促進給付金・自立支援教育訓練給付金、国民健康保険料・国民年金保険料の減免/免除、自治体のひとり親家庭支援窓口（母子・父子自立支援員）、養育費の相談窓口。",
     "- 失業・収入減: 雇用保険の基本手当（失業給付）、求職者支援制度（職業訓練受講給付金）、住居確保給付金、生活福祉資金貸付（社会福祉協議会）、国民年金保険料の免除（失業特例）、国民健康保険料の軽減・減免（非自発的失業者の軽減）、住民税の減免・猶予、自立相談支援機関（生活困窮者自立支援制度）、生活保護。",
     "- 高齢の親の介護: 地域包括支援センター（最初の相談先）、介護保険の要介護認定とサービス、高額介護サービス費・高額医療合算介護サービス費、介護休業・介護休業給付金・介護休暇、自治体の家族介護支援（おむつ給付・家族介護慰労金など）、障害者控除対象者認定、仕事と介護の両立の相談窓口。",
+    "- 外国籍の方: 国籍に関係なく使える制度（児童手当、国民健康保険、生活福祉資金貸付、住居確保給付金など）を中心に案内し、在留資格によって対象外になりうる制度（生活保護など）は断定せず申請先への確認を促す。" + FOREIGN_RESIDENT_DESKS,
     "## 緊急時",
     "- 食べるものがない、住む場所を失いそう、DV・虐待、命の危険や「死にたい」といった訴えがある場合は、聞き取りより先に、すぐ相談できる窓口（自治体の福祉窓口、自立相談支援機関、#8008 DV相談ナビ、189 児童相談所虐待対応ダイヤル、よりそいホットライン 0120-279-338、いのちの電話 など。番号は最新情報で確認）を案内する。命の危険が迫っている場合は 110 番・119 番を案内する。",
     WEB_SEARCH
@@ -126,8 +140,8 @@ function supportPrompt() {
   ];
 }
 
-function systemPrompt(mode: Mode) {
-  return (mode === "support" ? supportPrompt() : chatPrompt())
+function systemPrompt(mode: Mode, locale: Locale) {
+  return (mode === "support" ? supportPrompt(locale) : chatPrompt(locale))
     .filter(Boolean)
     .join("\n");
 }
@@ -192,6 +206,9 @@ export async function POST(req: Request) {
   const messages: ChatMessage[] = parsed.messages;
   const mode: Mode =
     (raw as { mode?: unknown }).mode === "support" ? "support" : "chat";
+  // 画面の表示言語（省略時・不正な値は日本語）
+  const rawLocale = (raw as { locale?: unknown }).locale;
+  const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -209,7 +226,7 @@ export async function POST(req: Request) {
       reasoning: { effort: "low" },
       // 行政相談は個人情報を含みうるため、入力を学習・保存に使うプロバイダーへはルーティングしない
       provider: { data_collection: "deny" },
-      messages: [{ role: "system", content: systemPrompt(mode) }, ...messages],
+      messages: [{ role: "system", content: systemPrompt(mode, locale) }, ...messages],
       ...(WEB_SEARCH
         ? { plugins: [{ id: "web", include_domains: INCLUDE_DOMAINS }] }
         : {}),
@@ -272,7 +289,7 @@ export async function POST(req: Request) {
 
             if (chunk.error) {
               console.error("OpenRouter stream error", chunk.error.message);
-              controller.enqueue(encoder.encode("\n\n[エラーが発生しました。]"));
+              controller.enqueue(encoder.encode(`\n\n[${MESSAGES[locale].errorGeneric}]`));
               continue;
             }
             const delta = chunk.choices?.[0]?.delta;
@@ -298,11 +315,11 @@ export async function POST(req: Request) {
             .slice(0, 3)
             .map((c) => `[${linkLabel(c)}](${c.url})`)
             .join(" · ");
-          controller.enqueue(encoder.encode(`\n\n出典: ${list}`));
+          controller.enqueue(encoder.encode(`\n\n${MESSAGES[locale].sources}: ${list}`));
         }
       } catch (err) {
         console.error(err);
-        controller.enqueue(encoder.encode("\n\n[エラーが発生しました。]"));
+        controller.enqueue(encoder.encode(`\n\n[${MESSAGES[locale].errorGeneric}]`));
       } finally {
         controller.close();
       }

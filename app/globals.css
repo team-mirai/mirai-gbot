@@ -108,10 +108,30 @@ body {
   border-radius: var(--border-radius-8);
 }
 
-/* DADS ボタン（テキスト・S サイズ） */
-.header-button {
+.header-actions {
   margin-left: auto;
   align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* 表示言語の切り替え（DADS セレクトボックス・S サイズ相当） */
+.locale-select {
+  min-height: 36px;
+  padding: 0 8px;
+  font: inherit;
+  font-size: var(--font-size-14);
+  color: var(--color-neutral-solid-gray-900);
+  background: var(--bg-base);
+  border: 1px solid var(--border-field);
+  border-radius: var(--border-radius-8);
+  cursor: pointer;
+}
+
+/* DADS ボタン（テキスト・S サイズ） */
+.header-button {
   min-height: 36px;
   padding: 0 12px;
   font: inherit;
