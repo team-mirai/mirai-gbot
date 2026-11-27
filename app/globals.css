@@ -26,6 +26,22 @@
   box-sizing: border-box;
 }
 
+/* 文字サイズ切り替え: ルートの文字サイズを変え、rem 指定の DADS トークンを追従させる。
+   % 指定なので OS・ブラウザ側の文字サイズ設定も尊重される。 */
+html {
+  font-size: 100%;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+html[data-font-size="large"] {
+  font-size: 125%;
+}
+
+html[data-font-size="xlarge"] {
+  font-size: 150%;
+}
+
 html,
 body {
   margin: 0;
@@ -128,6 +144,71 @@ body {
   color: var(--key);
   background: var(--key-tint);
   border-radius: var(--border-radius-8);
+}
+
+/* 表示設定（文字サイズ・やさしい日本語） */
+.settings {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 16px 12px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  /* Dns-14N-130 */
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-130);
+}
+
+.font-size {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.settings-label {
+  margin-right: 4px;
+  color: var(--text-description);
+}
+
+/* タップ領域は 44px 以上を確保（WCAG 2.5.5 / DADS） */
+.toggle {
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0 12px;
+  font: inherit;
+  color: var(--key);
+  background: var(--bg-base);
+  border: 1px solid var(--key);
+  border-radius: var(--border-radius-8);
+  cursor: pointer;
+}
+
+.toggle:hover:not([aria-pressed="true"]) {
+  background: var(--key-tint);
+}
+
+.toggle[aria-pressed="true"] {
+  font-weight: var(--font-weight-700);
+  color: var(--color-neutral-white);
+  background: var(--key);
+}
+
+.easy-japanese {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+/* DADS チェックボックス相当 */
+.easy-japanese input {
+  width: 1.5em;
+  height: 1.5em;
+  margin: 0;
+  accent-color: var(--key);
 }
 
 /* メッセージ一覧 */
