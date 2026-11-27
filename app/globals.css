@@ -135,6 +135,70 @@ body {
   cursor: not-allowed;
 }
 
+/* ふりがなの切り替えスイッチ */
+.furigana-switch {
+  margin-left: auto;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  flex-shrink: 0;
+  font-size: var(--font-size-14);
+  color: var(--text-body);
+  cursor: pointer;
+}
+
+.furigana-switch + .header-button {
+  margin-left: 0;
+}
+
+.furigana-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.furigana-switch-track {
+  position: relative;
+  width: 40px;
+  height: 24px;
+  border: 1px solid var(--border-field);
+  border-radius: 12px;
+  background: var(--bg-base);
+  transition: background-color 0.15s;
+}
+
+.furigana-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--border-field);
+  transition: transform 0.15s;
+}
+
+.furigana-switch input:checked + .furigana-switch-track {
+  background: var(--key);
+  border-color: var(--key);
+}
+
+.furigana-switch input:checked + .furigana-switch-track::after {
+  background: var(--bg-base);
+  transform: translateX(16px);
+}
+
+.furigana-switch input:focus-visible + .furigana-switch-track {
+  outline: 4px solid var(--color-neutral-black);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px var(--focus-ring);
+}
+
 /* メッセージ一覧 */
 .messages {
   flex: 1;
@@ -331,6 +395,13 @@ body {
 .md a:hover {
   color: var(--key-active);
   text-decoration-thickness: 3px;
+}
+
+/* ふりがな: 読みはコピー対象に含めない */
+.md rt {
+  font-size: 0.55em;
+  letter-spacing: 0;
+  user-select: none;
 }
 
 .md code {

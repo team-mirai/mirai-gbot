@@ -1,9 +1,10 @@
 import { Fragment, ReactNode } from "react";
+import { stripRuby } from "./furigana";
 
 // チャット向けの軽量 Markdown レンダラー（外部依存なし・innerHTML 不使用）。
 // 対応: 段落 / 改行, 見出し(太字の行として表示), 箇条書き・番号付きリスト,
 // 引用, 水平線, コードブロック, インラインの **太字** *斜体* `code`,
-// [テキスト](URL) と裸の URL のリンク化。
+// [テキスト](URL) と裸の URL のリンク化、ふりがな（app/furigana.ts の目印 → <ruby>）。
 
 const SAFE_URL = /^(https?:\/\/|mailto:)/i;
 
@@ -31,7 +32,7 @@ function splitTrailing(url: string): [string, string] {
 }
 
 const INLINE =
-  /(`[^`\n]+`)|\[([^\]\n]+)\]\((https?:\/\/[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)|(https?:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%()\[\]]+)|\*\*([^*\n]+)\*\*|(?<![\w*])\*([^*\n]+)\*(?![\w*])/g;
+  /(`[^`\n]+`)|\[([^\]\n]+)\]\((https?:\/\/[^\s()]+(?:\([^\s()]*\)[^\s()]*)*)\)|(https?:\/\/[A-Za-z0-9\-._~:/?#@!$&*+,;=%()\[\]]+)|\*\*([^*\n]+)\*\*|(?<![\w*])\*([^*\n]+)\*(?![\w*])|([^-\n]+)([^-\n]+)/g;
 
 function renderInline(text: string, keyPrefix = ""): ReactNode[] {
   const out: ReactNode[] = [];
@@ -42,10 +43,10 @@ function renderInline(text: string, keyPrefix = ""): ReactNode[] {
     if (start > last) out.push(text.slice(last, start));
     const key = `${keyPrefix}${i++}`;
     if (m[1]) {
-      out.push(<code key={key}>{m[1].slice(1, -1)}</code>);
+      out.push(<code key={key}>{stripRuby(m[1].slice(1, -1))}</code>);
     } else if (m[2] && m[3]) {
       out.push(
-        <Link key={key} href={m[3]}>
+        <Link key={key} href={stripRuby(m[3])}>
           {renderInline(m[2], `${key}-`)}
         </Link>,
       );
@@ -61,6 +62,13 @@ function renderInline(text: string, keyPrefix = ""): ReactNode[] {
       out.push(<strong key={key}>{renderInline(m[5], `${key}-`)}</strong>);
     } else if (m[6]) {
       out.push(<em key={key}>{renderInline(m[6], `${key}-`)}</em>);
+    } else if (m[7] && m[8]) {
+      out.push(
+        <ruby key={key}>
+          {m[7]}
+          <rt>{m[8]}</rt>
+        </ruby>,
+      );
     }
     last = start + m[0].length;
   }
@@ -204,7 +212,7 @@ export function Markdown({ text }: { text: string }) {
           case "code":
             return (
               <pre key={i}>
-                <code>{b.text}</code>
+                <code>{stripRuby(b.text)}</code>
               </pre>
             );
           case "hr":

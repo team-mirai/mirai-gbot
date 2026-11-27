@@ -2,11 +2,14 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { fetchFurigana } from "./furigana";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 // "chat": 通常の行政相談 / "support": 使える支援制度を探す（AI インタビュー）
 type Mode = "chat" | "support";
+
+const FURIGANA_STORAGE_KEY = "mirai-gbot:furigana";
 
 const SUPPORT_START = "使える支援制度を探したいです。";
 
@@ -21,6 +24,11 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
+  // ふりがな表示のオン・オフ（ブラウザに保存して次回も引き継ぐ）
+  const [furigana, setFurigana] = useState(false);
+  // 回答テキスト → ふりがな付きテキスト（null は取得失敗。ふりがななしで表示する）
+  const [rubyTexts, setRubyTexts] = useState<Record<string, string | null>>({});
+  const rubyRequested = useRef(new Set<string>());
   const bottomRef = useRef<HTMLDivElement>(null);
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
@@ -40,6 +48,37 @@ export default function Home() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
+
+  useEffect(() => {
+    try {
+      setFurigana(localStorage.getItem(FURIGANA_STORAGE_KEY) === "on");
+    } catch {
+      // localStorage が使えない環境では保存しない
+    }
+  }, []);
+
+  function toggleFurigana(on: boolean) {
+    setFurigana(on);
+    try {
+      localStorage.setItem(FURIGANA_STORAGE_KEY, on ? "on" : "off");
+    } catch {
+      // 同上
+    }
+  }
+
+  // ふりがながオンのとき、書き終わった回答の読みを取得する（生成中の回答は完了後に取得）
+  useEffect(() => {
+    if (!furigana) return;
+    messages.forEach((m, i) => {
+      if (m.role !== "assistant" || m.error || !m.content) return;
+      if (loading && i === messages.length - 1) return;
+      if (rubyRequested.current.has(m.content)) return;
+      rubyRequested.current.add(m.content);
+      fetchFurigana(m.content).then((annotated) =>
+        setRubyTexts((prev) => ({ ...prev, [m.content]: annotated })),
+      );
+    });
+  }, [furigana, messages, loading]);
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -116,6 +155,16 @@ export default function Home() {
               行政手続きや公的制度についての疑問に答える、行政相談用のチャットボットです。
             </p>
           )}
+          <label className="furigana-switch">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={furigana}
+              onChange={(e) => toggleFurigana(e.target.checked)}
+            />
+            <span className="furigana-switch-track" aria-hidden="true" />
+            ふりがな
+          </label>
           {messages.length > 0 && (
             <button
               type="button"
@@ -174,7 +223,7 @@ export default function Home() {
                 </span>
                 <div className="bubble" role={m.error ? "alert" : undefined}>
                   {m.role === "assistant" && m.content && !m.error ? (
-                    <Markdown text={m.content} />
+                    <Markdown text={(furigana && rubyTexts[m.content]) || m.content} />
                   ) : (
                     m.content ||
                     (loading ? <span className="typing">回答を作成中…</span> : "")

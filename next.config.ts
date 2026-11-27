@@ -29,6 +29,12 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // ふりがな（/api/furigana）: kuromoji は辞書ファイルを実行時に fs で読むため、
+  // バンドルせず node_modules から読み込み、辞書もデプロイに含める
+  serverExternalPackages: ["kuromoji"],
+  outputFileTracingIncludes: {
+    "/api/furigana": ["./node_modules/kuromoji/dict/**/*"],
+  },
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },
