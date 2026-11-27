@@ -63,18 +63,18 @@ def main() -> None:
         print(f"⚠ 質問セットが混在しています {qfiles}\n")
 
     base = runs[0]
-    print("| 実行 | ターゲット | n | 正答率 | 95%CI | Δ正答率 | 平均スコア | 誤り率 | 出典 | p50秒 | コスト$ |")
-    print("|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|")
+    print("| 実行 | ターゲット | n | 正答率 | 95%CI | Δ正答率 | 平均スコア | 誤り率 | 出典 | 公的出典 | p50秒 | コスト$ |")
+    print("|---|---|---:|---:|---|---:|---:|---:|---:|---:|---:|---:|")
     for r in runs:
         o = r["overall"]
         if not o.get("n"):
-            print(f"| {r['_dir'].name} | {r['target_desc']} | 0 | - | - | - | - | - | - | - | - |")
+            print(f"| {r['_dir'].name} | {r['target_desc']} | 0 | - | - | - | - | - | - | - | - | - |")
             continue
         delta = "" if r is base else f"{(o['pass_rate'] - base['overall'].get('pass_rate', 0))*100:+.1f}pt"
         ci = f"{o['pass_rate_ci95'][0]*100:.0f}–{o['pass_rate_ci95'][1]*100:.0f}"
         cost = r["cost_usd"]["answer"] + r["cost_usd"]["judge"]
         print(f"| {r['_dir'].name} | {r['target_desc']} | {o['n']} | {pct(o['pass_rate'])} | {ci} | {delta} | "
-              f"{o['mean_score']} | {pct(o['error_rate'])} | {pct(o['grounded_rate'])} | {r['latency_s']['p50']} | {cost:.3f} |")
+              f"{o['mean_score']} | {pct(o['error_rate'])} | {pct(o['grounded_rate'])} | {pct(o.get('official_source_rate'))} | {r['latency_s']['p50']} | {cost:.3f} |")
 
     if args.category:
         cats = sorted({c for r in runs for c in r["by_category"]})
