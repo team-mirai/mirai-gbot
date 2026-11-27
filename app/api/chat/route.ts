@@ -7,6 +7,7 @@ import {
   rateLimit,
   safeCitationUrl,
 } from "./guard";
+import { BLOCKED_REPLY, BLOCKED_TOPIC_RULE, mentionsBlockedTopic } from "./blocked";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -139,6 +140,7 @@ const EASY_JAPANESE_PROMPT = [
 function systemPrompt(mode: Mode, easyJapanese = false) {
   return [
     ...(mode === "support" ? supportPrompt() : chatPrompt()),
+    BLOCKED_TOPIC_RULE,
     easyJapanese ? EASY_JAPANESE_PROMPT : "",
   ]
     .filter(Boolean)
@@ -206,6 +208,11 @@ export async function POST(req: Request) {
   const mode: Mode =
     (raw as { mode?: unknown }).mode === "support" ? "support" : "chat";
   const easyJapanese = (raw as { easyJapanese?: unknown }).easyJapanese === true;
+
+  // 回答しない話題（blocked.ts）に触れる質問には、LLM を呼ばずに定型文だけを返す
+  if (mentionsBlockedTopic(messages[messages.length - 1].content)) {
+    return plain(BLOCKED_REPLY, 200);
+  }
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
