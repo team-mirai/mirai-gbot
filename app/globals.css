@@ -6,6 +6,8 @@
   --user-bg: #2563eb;
   --user-fg: #ffffff;
   --bot-bg: #f3f4f6;
+  --link: #1d4ed8;
+  --code-bg: rgba(0, 0, 0, 0.06);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -15,6 +17,8 @@
     --muted: #9a9a9a;
     --border: #2a2a2a;
     --bot-bg: #1f1f1f;
+    --link: #7aa7ff;
+    --code-bg: rgba(255, 255, 255, 0.08);
   }
 }
 
@@ -78,6 +82,67 @@ body {
 .bubble.assistant {
   align-self: flex-start;
   background: var(--bot-bg);
+  white-space: normal;
+}
+
+.md > :first-child {
+  margin-top: 0;
+}
+
+.md > :last-child {
+  margin-bottom: 0;
+}
+
+.md p,
+.md ul,
+.md ol,
+.md blockquote,
+.md pre {
+  margin: 0 0 0.6em;
+}
+
+.md ul,
+.md ol {
+  padding-left: 1.4em;
+}
+
+.md a {
+  color: var(--link);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  word-break: break-all;
+}
+
+.md code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.9em;
+  background: var(--code-bg);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.md pre {
+  background: var(--code-bg);
+  padding: 10px 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+}
+
+.md pre code {
+  background: none;
+  padding: 0;
+}
+
+.md blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 10px;
+  color: var(--muted);
+}
+
+.md hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.8em 0;
 }
 
 .composer {
