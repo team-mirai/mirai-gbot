@@ -80,6 +80,8 @@ const FOREIGN_RESIDENT_DESKS =
 function scopeRules() {
   return [
     "対応範囲は行政に関する相談です（行政手続き・届出・申請、公的制度や給付・補助金、税金・年金・保険・福祉、行政機関の窓口や連絡先、行政サービスへの苦情や要望など）。",
+    "あなたは日本の行政相談ボットです。ユーザーが国や地域を指定していない質問（例:「AI 法案について教えて」「最低賃金はいくら？」）は、日本（国・自治体）の法律・制度・行政についての質問として答えてください。外国の法律や制度を主題にして答えないでください。比較などで外国に触れる場合は、日本の話を先に答えたうえで、外国の話であることを明記してください。",
+    "自分で Web 検索のクエリを考える場合は、国が指定されていなければ「日本」や関係する省庁・自治体名をクエリに含め、日本の情報を優先して調べてください。",
     "対応範囲外の質問（例: 雑談、創作、プログラミング、一般的な知識問題、個人的な趣味や買い物の相談など、行政と関係のない内容）には回答しないでください。その場合は「申し訳ありませんが、そのご質問はスコープ外のためお答えできません。私は行政相談用のチャットボットですので、行政手続きや公的制度などについてご相談ください。」という趣旨を短く伝えるだけにし、質問の中身には答えないでください。",
   ];
 }
@@ -140,8 +142,21 @@ function supportPrompt(locale: Locale) {
   ];
 }
 
-function systemPrompt(mode: Mode, locale: Locale) {
-  return (mode === "support" ? supportPrompt(locale) : chatPrompt(locale))
+// 「やさしい日本語」モード: 高齢の方や日本語に不慣れな方にも読みやすい表現で答える
+const EASY_JAPANESE_PROMPT = [
+  "【やさしい日本語モード】ユーザーは「やさしい日本語」での回答を希望しています。日本語で答える場合は次を守ってください。",
+  "- 1 文を短くする（目安 30 字以内）。1 つの文で 1 つのことだけを言う。",
+  "- 難しい言葉・漢語・カタカナ語はできるだけ使わず、ふだんの言葉に言いかえる。",
+  "- 制度名や手続き名など、言いかえられない専門用語は、そのあとにかっこ書きでやさしい説明を付ける（例: 住民票（住んでいる場所を証明する書類））。",
+  "- 二重否定、あいまいな言い方、敬語の重ねすぎ（「〜させていただきます」など）は避け、「です・ます」でていねいに書く。",
+  "- 日付・時間・金額・電話番号などの数字は省略せずにはっきり書く。",
+].join("\n");
+
+function systemPrompt(mode: Mode, locale: Locale, easyJapanese = false) {
+  return [
+    ...(mode === "support" ? supportPrompt(locale) : chatPrompt(locale)),
+    easyJapanese ? EASY_JAPANESE_PROMPT : "",
+  ]
     .filter(Boolean)
     .join("\n");
 }
@@ -209,6 +224,7 @@ export async function POST(req: Request) {
   // 画面の表示言語（省略時・不正な値は日本語）
   const rawLocale = (raw as { locale?: unknown }).locale;
   const locale: Locale = isLocale(rawLocale) ? rawLocale : DEFAULT_LOCALE;
+  const easyJapanese = (raw as { easyJapanese?: unknown }).easyJapanese === true;
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -226,7 +242,7 @@ export async function POST(req: Request) {
       reasoning: { effort: "low" },
       // 行政相談は個人情報を含みうるため、入力を学習・保存に使うプロバイダーへはルーティングしない
       provider: { data_collection: "deny" },
-      messages: [{ role: "system", content: systemPrompt(mode, locale) }, ...messages],
+      messages: [{ role: "system", content: systemPrompt(mode, locale, easyJapanese) }, ...messages],
       ...(WEB_SEARCH
         ? { plugins: [{ id: "web", include_domains: INCLUDE_DOMAINS }] }
         : {}),
