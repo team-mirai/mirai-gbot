@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
@@ -9,6 +9,9 @@ type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 type Mode = "chat" | "support";
 
 const SUPPORT_START = "使える支援制度を探したいです。";
+
+// 最下部からこの距離（px）以内にいれば「最下部にいる」とみなして自動スクロールを続ける
+const STICK_THRESHOLD = 48;
 
 // 文字サイズ（html 要素の data-font-size 属性で切り替え。DADS の文字サイズは rem 指定なので追従する）
 const FONT_SIZES = [
@@ -67,9 +70,12 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [greeting, setGreeting] = useState(0);
   const [mode, setMode] = useState<Mode>("chat");
+  const scrollRef = useRef<HTMLElement>(null);
+  // 最下部付近にいる間だけ新しい内容に合わせて自動スクロールする
+  const stickToBottomRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>("normal");
   const [easyJapanese, setEasyJapanese] = useState(false);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const inChat = messages.length > 0;
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
@@ -108,8 +114,26 @@ export default function Home() {
     save(EASY_JAPANESE_KEY, String(value));
   }
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  function scrollToBottom() {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = true;
+    setShowJump(false);
+    // smooth にするとアニメーション中の scroll イベントで追従が外れるため即時に移動する
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD;
+    stickToBottomRef.current = atBottom;
+    setShowJump(!atBottom);
+  }
+
+  // ユーザーが上へスクロールしている間は、生成中でも最下部へ引き戻さない
+  useLayoutEffect(() => {
+    if (stickToBottomRef.current) scrollToBottom();
   }, [messages]);
 
   useEffect(() => {
@@ -179,6 +203,8 @@ export default function Home() {
   function reset() {
     if (loading) return;
     speech.cancel();
+    stickToBottomRef.current = true;
+    setShowJump(false);
     setMode("chat");
     setMessages([]);
     setInput("");
@@ -372,35 +398,41 @@ export default function Home() {
         {settings}
       </header>
 
-      <main className="messages" aria-label="会話">
-        <div className="messages-inner" aria-live="polite">
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`message ${m.role}${m.error ? " error" : ""}`}
-            >
-              {m.role === "assistant" && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="avatar" src="/bot-avatar.png" alt="" width={40} height={40} />
-              )}
-              <div className="message-body">
-                <span className="message-label">
-                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
-                </span>
-                <div className="bubble" role={m.error ? "alert" : undefined}>
-                  {m.role === "assistant" && m.content && !m.error ? (
-                    <Markdown text={m.content} />
-                  ) : (
-                    m.content ||
-                    (loading ? <span className="typing">回答を作成中…</span> : "")
-                  )}
+      <div className="messages-wrap">
+        <main className="messages" aria-label="会話" ref={scrollRef} onScroll={handleScroll}>
+          <div className="messages-inner" aria-live="polite">
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={`message ${m.role}${m.error ? " error" : ""}`}
+              >
+                {m.role === "assistant" && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="avatar" src="/bot-avatar.png" alt="" width={40} height={40} />
+                )}
+                <div className="message-body">
+                  <span className="message-label">
+                    {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+                  </span>
+                  <div className="bubble" role={m.error ? "alert" : undefined}>
+                    {m.role === "assistant" && m.content && !m.error ? (
+                      <Markdown text={m.content} />
+                    ) : (
+                      m.content ||
+                      (loading ? <span className="typing">回答を作成中…</span> : "")
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      </main>
+            ))}
+          </div>
+        </main>
+        {showJump && (
+          <button type="button" className="jump-latest" onClick={scrollToBottom}>
+            最新へ移動
+          </button>
+        )}
+      </div>
 
       <form className="composer" onSubmit={handleSubmit}>
         <div className="composer-inner">

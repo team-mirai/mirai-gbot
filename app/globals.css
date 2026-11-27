@@ -212,8 +212,17 @@ body {
 }
 
 /* メッセージ一覧 */
+.messages-wrap {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .messages {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   background: var(--bg-subtle);
 }
@@ -225,6 +234,30 @@ body {
   display: flex;
   flex-direction: column;
   gap: 16px;
+}
+
+/* 上へスクロール中に出す「最新へ移動」ボタン（DADS セカンダリボタン相当・S サイズ） */
+.jump-latest {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  min-height: 36px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: var(--font-size-14);
+  color: var(--key);
+  background: var(--bg-base);
+  border: 1px solid var(--key);
+  border-radius: var(--border-radius-8);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  cursor: pointer;
+}
+
+.jump-latest:hover {
+  background: var(--key-tint);
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .message {
