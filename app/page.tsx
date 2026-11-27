@@ -4,7 +4,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
-type Message = { role: "user" | "assistant"; content: string };
+type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,7 +36,10 @@ export default function Home() {
     if (!text || loading) return;
     speech.cancel();
 
-    const history: Message[] = [...messages, { role: "user", content: text }];
+    const history: Message[] = [
+      ...messages.filter((m) => !m.error),
+      { role: "user", content: text },
+    ];
     setMessages([...history, { role: "assistant", content: "" }]);
     setInput("");
     setLoading(true);
@@ -45,7 +48,10 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        // サーバー側の上限（20 件）に合わせて直近の履歴だけ送る
+        body: JSON.stringify({
+          messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
+        }),
       });
 
       if (!res.ok || !res.body) {
@@ -63,7 +69,7 @@ export default function Home() {
       }
     } catch (err) {
       const msg = err instanceof Error && err.message ? err.message : "エラーが発生しました。";
-      setMessages([...history, { role: "assistant", content: `[${msg}]` }]);
+      setMessages([...history, { role: "assistant", content: msg, error: true }]);
     } finally {
       setLoading(false);
     }
@@ -71,53 +77,86 @@ export default function Home() {
 
   return (
     <main className="container">
-      <header className="header">mirai-gbot</header>
+      <header className="header">
+        <div className="header-inner">
+          <h1 className="header-title">mirai-gbot</h1>
+          <p className="header-description">AI チャットボット</p>
+        </div>
+      </header>
 
-      <div className="messages">
-        {messages.length === 0 && (
-          <p className="empty">何でも聞いてください。</p>
-        )}
-        {messages.map((m, i) => (
-          <div key={i} className={`bubble ${m.role}`}>
-            {m.role === "assistant" && m.content ? (
-              <Markdown text={m.content} />
-            ) : (
-              m.content || (loading ? "…" : "")
-            )}
-          </div>
-        ))}
-        <div ref={bottomRef} />
-      </div>
+      <section className="messages" aria-label="会話">
+        <div className="messages-inner" aria-live="polite">
+          {messages.length === 0 && (
+            <p className="empty">
+              行政手続きや公的制度について聞いてください。
+              <br />
+              マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
+            </p>
+          )}
+          {messages.map((m, i) => (
+            <div
+              key={i}
+              className={`message ${m.role}${m.error ? " error" : ""}`}
+            >
+              <span className="message-label">
+                {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+              </span>
+              <div className="bubble" role={m.error ? "alert" : undefined}>
+                {m.role === "assistant" && m.content && !m.error ? (
+                  <Markdown text={m.content} />
+                ) : (
+                  m.content ||
+                  (loading ? <span className="typing">回答を作成中…</span> : "")
+                )}
+              </div>
+            </div>
+          ))}
+          <div ref={bottomRef} />
+        </div>
+      </section>
 
       <form className="composer" onSubmit={handleSubmit}>
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder={speech.listening ? "お話しください…" : "メッセージを入力"}
-          disabled={loading}
-          autoFocus
-        />
-        {speech.supported && (
-          <button
-            type="button"
-            className={`mic${speech.listening ? " listening" : ""}`}
-            onClick={toggleVoiceInput}
+        <div className="composer-inner">
+          <label htmlFor="message-input" className="visually-hidden">
+            メッセージ
+          </label>
+          <input
+            id="message-input"
+            className="text-field"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder={speech.listening ? "お話しください…" : "メッセージを入力"}
             disabled={loading}
-            aria-label={speech.listening ? "音声入力を停止" : "音声で入力"}
-            aria-pressed={speech.listening}
-            title={speech.listening ? "音声入力を停止" : "音声で入力"}
+            autoComplete="off"
+            maxLength={2000}
+            autoFocus
+          />
+          {speech.supported && (
+            <button
+              type="button"
+              className={`mic${speech.listening ? " listening" : ""}`}
+              onClick={toggleVoiceInput}
+              disabled={loading}
+              aria-label={speech.listening ? "音声入力を停止" : "音声で入力"}
+              aria-pressed={speech.listening}
+              title={speech.listening ? "音声入力を停止" : "音声で入力"}
+            >
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
+                <path
+                  fill="currentColor"
+                  d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
+                />
+              </svg>
+            </button>
+          )}
+          <button
+            type="submit"
+            className="button-primary"
+            disabled={loading || !input.trim()}
           >
-            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true">
-              <path
-                fill="currentColor"
-                d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2Z"
-              />
-            </svg>
+            送信
           </button>
-        )}
-        <button type="submit" disabled={loading || !input.trim()}>
-          送信
-        </button>
+        </div>
       </form>
       {speech.error && (
         <p className="voice-error" role="alert">
