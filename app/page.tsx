@@ -5,11 +5,59 @@ import { Markdown } from "./Markdown";
 
 type Message = { role: "user" | "assistant"; content: string };
 
+// 文字サイズ（html 要素の data-font-size 属性で切り替え。CSS 側は rem 指定）
+const FONT_SIZES = [
+  { value: "normal", label: "標準" },
+  { value: "large", label: "大" },
+  { value: "xlarge", label: "特大" },
+] as const;
+type FontSize = (typeof FONT_SIZES)[number]["value"];
+
+// 設定はブラウザに保存する（layout.tsx の初期化スクリプトと同じキー）
+const FONT_SIZE_KEY = "mirai-gbot:font-size";
+const EASY_JAPANESE_KEY = "mirai-gbot:easy-japanese";
+
+function isFontSize(v: string | null): v is FontSize {
+  return FONT_SIZES.some((f) => f.value === v);
+}
+
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // プライベートモード等で保存できなくても動作は続ける
+  }
+}
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [fontSize, setFontSize] = useState<FontSize>("normal");
+  const [easyJapanese, setEasyJapanese] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 保存済みの設定を復元（SSR とのずれを避けるためマウント後に読む）
+  useEffect(() => {
+    try {
+      const f = localStorage.getItem(FONT_SIZE_KEY);
+      if (isFontSize(f)) setFontSize(f);
+      setEasyJapanese(localStorage.getItem(EASY_JAPANESE_KEY) === "true");
+    } catch {
+      // 読めなければ既定値のまま
+    }
+  }, []);
+
+  function changeFontSize(value: FontSize) {
+    setFontSize(value);
+    document.documentElement.dataset.fontSize = value;
+    save(FONT_SIZE_KEY, value);
+  }
+
+  function changeEasyJapanese(value: boolean) {
+    setEasyJapanese(value);
+    save(EASY_JAPANESE_KEY, String(value));
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,7 +77,7 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: history }),
+        body: JSON.stringify({ messages: history, easyJapanese }),
       });
 
       if (!res.ok || !res.body) {
@@ -55,7 +103,35 @@ export default function Home() {
 
   return (
     <main className="container">
-      <header className="header">mirai-gbot</header>
+      <header className="header">
+        <h1 className="title">mirai-gbot</h1>
+        <div className="settings">
+          <div className="font-size" role="group" aria-label="文字サイズ">
+            <span className="settings-label" aria-hidden="true">
+              文字サイズ
+            </span>
+            {FONT_SIZES.map((f) => (
+              <button
+                key={f.value}
+                type="button"
+                className="toggle"
+                aria-pressed={fontSize === f.value}
+                onClick={() => changeFontSize(f.value)}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          <label className="easy-japanese">
+            <input
+              type="checkbox"
+              checked={easyJapanese}
+              onChange={(e) => changeEasyJapanese(e.target.checked)}
+            />
+            やさしい日本語
+          </label>
+        </div>
+      </header>
 
       <div className="messages">
         {messages.length === 0 && (
@@ -78,6 +154,7 @@ export default function Home() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="メッセージを入力"
+          aria-label="メッセージ"
           disabled={loading}
           autoFocus
         />

@@ -10,7 +10,17 @@ const WEB_SEARCH = process.env.OPENROUTER_WEB_SEARCH !== "false";
 const MODEL =
   WEB_SEARCH && !BASE_MODEL.endsWith(":online") ? `${BASE_MODEL}:online` : BASE_MODEL;
 
-function systemPrompt() {
+// 「やさしい日本語」モード: 高齢の方や日本語に不慣れな方にも読みやすい表現で答える
+const EASY_JAPANESE_PROMPT = [
+  "【やさしい日本語モード】ユーザーは「やさしい日本語」での回答を希望しています。日本語で答える場合は次を守ってください。",
+  "- 1 文を短くする（目安 30 字以内）。1 つの文で 1 つのことだけを言う。",
+  "- 難しい言葉・漢語・カタカナ語はできるだけ使わず、ふだんの言葉に言いかえる。",
+  "- 制度名や手続き名など、言いかえられない専門用語は、そのあとにかっこ書きでやさしい説明を付ける（例: 住民票（住んでいる場所を証明する書類））。",
+  "- 二重否定、あいまいな言い方、敬語の重ねすぎ（「〜させていただきます」など）は避け、「です・ます」でていねいに書く。",
+  "- 日付・時間・金額・電話番号などの数字は省略せずにはっきり書く。",
+].join("\n");
+
+function systemPrompt(easyJapanese = false) {
   const today = new Date().toLocaleDateString("ja-JP", {
     timeZone: "Asia/Tokyo",
     year: "numeric",
@@ -32,6 +42,7 @@ function systemPrompt() {
     WEB_SEARCH
       ? "Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答えてください。出典は本文中に [サイト名](URL) の形で 1〜2 個だけ添え、URL をそのまま貼らないでください。検索結果で確認できないことは推測と明示してください。"
       : "",
+    easyJapanese ? EASY_JAPANESE_PROMPT : "",
   ]
     .filter(Boolean)
     .join("\n");
@@ -60,7 +71,7 @@ export async function POST(req: Request) {
     });
   }
 
-  let body: { messages?: ChatMessage[] };
+  let body: { messages?: ChatMessage[]; easyJapanese?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -89,7 +100,7 @@ export async function POST(req: Request) {
       stream: true,
       max_tokens: 4000,
       reasoning: { effort: "low" },
-      messages: [{ role: "system", content: systemPrompt() }, ...messages],
+      messages: [{ role: "system", content: systemPrompt(body.easyJapanese === true) }, ...messages],
     }),
   });
 
