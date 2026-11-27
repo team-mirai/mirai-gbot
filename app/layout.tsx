@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "mirai-gbot",
-  description: "シンプルなチャットボット",
+  description: "行政の手続きや制度について AI に相談できるチャットボット",
 };
 
 export default function RootLayout({
