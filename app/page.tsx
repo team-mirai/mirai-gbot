@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { Markdown } from "./Markdown";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 
@@ -80,8 +81,12 @@ export default function Home() {
                 {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
               </span>
               <div className="bubble" role={m.error ? "alert" : undefined}>
-                {m.content ||
-                  (loading ? <span className="typing">回答を作成中…</span> : "")}
+                {m.role === "assistant" && m.content && !m.error ? (
+                  <Markdown text={m.content} />
+                ) : (
+                  m.content ||
+                  (loading ? <span className="typing">回答を作成中…</span> : "")
+                )}
               </div>
             </div>
           ))}

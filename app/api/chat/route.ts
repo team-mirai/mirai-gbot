@@ -19,10 +19,15 @@ function systemPrompt() {
     weekday: "short",
   });
   return [
-    "あなたは親切で簡潔なアシスタントです。ユーザーと同じ言語で答えてください。",
+    "あなたは親切なチャットアシスタントです。ユーザーと同じ言語で答えてください。",
     `今日は ${today}（日本時間）です。`,
+    "これはチャットです。人と会話するように、短く自然に返してください。",
+    "- 1回の返答は基本 2〜4 文（日本語なら 200 字程度まで）。まず結論を一言で。",
+    "- 見出し（#）、表、長い箇条書き、太字の多用はしない。箇条書きが必要なときも 3 項目まで。",
+    "- 全部を一度に説明しようとせず、要点だけ答えて、必要なら「〇〇についても詳しく話しましょうか？」と続きを聞く。",
+    "- ユーザーが詳しい説明・一覧・手順などを明示的に求めたときだけ、長めに答えてよい。",
     WEB_SEARCH
-      ? "Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答え、根拠にした情報の出典をマークダウンリンク [ドメイン](URL) で示してください。検索結果で確認できないことは推測と明示してください。"
+      ? "Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答えてください。出典は本文中に [サイト名](URL) の形で 1〜2 個だけ添え、URL をそのまま貼らないでください。検索結果で確認できないことは推測と明示してください。"
       : "",
   ]
     .filter(Boolean)
@@ -30,6 +35,17 @@ function systemPrompt() {
 }
 
 type Citation = { url: string; title?: string };
+
+// 出典リンクの表示名: タイトル（長ければ短縮）→ なければドメイン
+function linkLabel(c: Citation): string {
+  const clean = (c.title ?? "").replace(/[\[\]\n]/g, " ").trim();
+  if (clean) return clean.length > 30 ? `${clean.slice(0, 29)}…` : clean;
+  try {
+    return new URL(c.url).hostname.replace(/^www\./, "");
+  } catch {
+    return c.url;
+  }
+}
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -68,7 +84,7 @@ export async function POST(req: Request) {
     body: JSON.stringify({
       model: MODEL,
       stream: true,
-      max_tokens: 16000,
+      max_tokens: 4000,
       reasoning: { effort: "low" },
       messages: [{ role: "system", content: systemPrompt() }, ...messages],
     }),
@@ -141,13 +157,13 @@ export async function POST(req: Request) {
           }
         }
 
-        // 検索で参照したページを末尾に出典として付ける
+        // 検索で参照したページを末尾に出典としてコンパクトに付ける
         if (citations.size > 0) {
           const list = [...citations.values()]
-            .slice(0, 8)
-            .map((c, i) => `${i + 1}. ${c.title ? `${c.title} — ` : ""}${c.url}`)
-            .join("\n");
-          controller.enqueue(encoder.encode(`\n\n---\n参考にした Web ページ:\n${list}`));
+            .slice(0, 3)
+            .map((c) => `[${linkLabel(c)}](${c.url})`)
+            .join(" · ");
+          controller.enqueue(encoder.encode(`\n\n出典: ${list}`));
         }
       } catch (err) {
         console.error(err);
