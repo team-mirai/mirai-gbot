@@ -3,9 +3,33 @@ export const maxDuration = 60;
 
 // OpenRouter 経由で Claude を呼び出す（OpenAI 互換の Chat Completions API）
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const MODEL = process.env.OPENROUTER_MODEL ?? "anthropic/claude-opus-5.5";
-const SYSTEM_PROMPT =
-  "あなたは親切で簡潔なアシスタントです。ユーザーと同じ言語で答えてください。";
+const BASE_MODEL = process.env.OPENROUTER_MODEL ?? "anthropic/claude-opus-5.5";
+// Web 検索: モデル名に ":online" を付けると OpenRouter が検索結果を付けて呼び出す。
+// OPENROUTER_WEB_SEARCH=false で無効化できる（既定は有効）。
+const WEB_SEARCH = process.env.OPENROUTER_WEB_SEARCH !== "false";
+const MODEL =
+  WEB_SEARCH && !BASE_MODEL.endsWith(":online") ? `${BASE_MODEL}:online` : BASE_MODEL;
+
+function systemPrompt() {
+  const today = new Date().toLocaleDateString("ja-JP", {
+    timeZone: "Asia/Tokyo",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "short",
+  });
+  return [
+    "あなたは親切で簡潔なアシスタントです。ユーザーと同じ言語で答えてください。",
+    `今日は ${today}（日本時間）です。`,
+    WEB_SEARCH
+      ? "Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答え、根拠にした情報の出典をマークダウンリンク [ドメイン](URL) で示してください。検索結果で確認できないことは推測と明示してください。"
+      : "",
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+type Citation = { url: string; title?: string };
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
 
@@ -46,7 +70,7 @@ export async function POST(req: Request) {
       stream: true,
       max_tokens: 16000,
       reasoning: { effort: "low" },
-      messages: [{ role: "system", content: SYSTEM_PROMPT }, ...messages],
+      messages: [{ role: "system", content: systemPrompt() }, ...messages],
     }),
   });
 
@@ -66,6 +90,7 @@ export async function POST(req: Request) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       let buffer = "";
+      const citations = new Map<string, Citation>();
       try {
         while (true) {
           const { done, value } = await reader.read();
@@ -82,7 +107,15 @@ export async function POST(req: Request) {
             if (data === "[DONE]") continue;
 
             let chunk: {
-              choices?: { delta?: { content?: string } }[];
+              choices?: {
+                delta?: {
+                  content?: string;
+                  annotations?: {
+                    type?: string;
+                    url_citation?: { url?: string; title?: string };
+                  }[];
+                };
+              }[];
               error?: { message?: string };
             };
             try {
@@ -97,9 +130,24 @@ export async function POST(req: Request) {
               );
               continue;
             }
-            const text = chunk.choices?.[0]?.delta?.content;
-            if (text) controller.enqueue(encoder.encode(text));
+            const delta = chunk.choices?.[0]?.delta;
+            for (const a of delta?.annotations ?? []) {
+              const url = a.url_citation?.url;
+              if (a.type === "url_citation" && url && !citations.has(url)) {
+                citations.set(url, { url, title: a.url_citation?.title });
+              }
+            }
+            if (delta?.content) controller.enqueue(encoder.encode(delta.content));
           }
+        }
+
+        // 検索で参照したページを末尾に出典として付ける
+        if (citations.size > 0) {
+          const list = [...citations.values()]
+            .slice(0, 8)
+            .map((c, i) => `${i + 1}. ${c.title ? `${c.title} — ` : ""}${c.url}`)
+            .join("\n");
+          controller.enqueue(encoder.encode(`\n\n---\n参考にした Web ページ:\n${list}`));
         }
       } catch (err) {
         console.error(err);
