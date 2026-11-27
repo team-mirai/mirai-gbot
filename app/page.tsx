@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { Markdown } from "./Markdown";
 
 type Message = { role: "user" | "assistant"; content: string };
 
@@ -62,7 +63,11 @@ export default function Home() {
         )}
         {messages.map((m, i) => (
           <div key={i} className={`bubble ${m.role}`}>
-            {m.content || (loading ? "…" : "")}
+            {m.role === "assistant" && m.content ? (
+              <Markdown text={m.content} />
+            ) : (
+              m.content || (loading ? "…" : "")
+            )}
           </div>
         ))}
         <div ref={bottomRef} />
