@@ -176,3 +176,38 @@ body {
   opacity: 0.5;
   cursor: default;
 }
+
+.composer button.mic {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  background: var(--bot-bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+
+.composer button.mic.listening {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #ffffff;
+  animation: mic-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes mic-pulse {
+  50% {
+    box-shadow: 0 0 0 6px rgba(220, 38, 38, 0.25);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer button.mic.listening {
+    animation: none;
+  }
+}
+
+.voice-error {
+  margin: -8px 16px 12px;
+  font-size: 14px;
+  color: #dc2626;
+}
