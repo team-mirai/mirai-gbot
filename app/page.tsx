@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, useLayoutEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
@@ -9,6 +9,9 @@ type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 type Mode = "chat" | "support";
 
 const SUPPORT_START = "使える支援制度を探したいです。";
+
+// 最下部からこの距離（px）以内にいれば「最下部にいる」とみなして自動スクロールを続ける
+const STICK_THRESHOLD = 48;
 
 const EXAMPLE_QUESTIONS = [
   "住民票の取り方を教えてください",
@@ -21,7 +24,10 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLElement>(null);
+  // 最下部付近にいる間だけ新しい内容に合わせて自動スクロールする
+  const stickToBottomRef = useRef(true);
+  const [showJump, setShowJump] = useState(false);
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
   const speech = useSpeechRecognition((transcript) => {
@@ -37,8 +43,26 @@ export default function Home() {
     }
   }
 
-  useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  function scrollToBottom() {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = true;
+    setShowJump(false);
+    // smooth にするとアニメーション中の scroll イベントで追従が外れるため即時に移動する
+    el.scrollTop = el.scrollHeight;
+  }
+
+  function handleScroll() {
+    const el = scrollRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight <= STICK_THRESHOLD;
+    stickToBottomRef.current = atBottom;
+    setShowJump(!atBottom);
+  }
+
+  // ユーザーが上へスクロールしている間は、生成中でも最下部へ引き戻さない
+  useLayoutEffect(() => {
+    if (stickToBottomRef.current) scrollToBottom();
   }, [messages]);
 
   function handleSubmit(e: FormEvent) {
@@ -55,6 +79,7 @@ export default function Home() {
 
   function resetChat() {
     if (loading) return;
+    stickToBottomRef.current = true;
     setMode("chat");
     setMessages([]);
   }
@@ -63,6 +88,8 @@ export default function Home() {
     const text = rawText.trim();
     if (!text || loading) return;
     speech.cancel();
+    // 自分で送信したときは最下部へ移動し、そのまま回答に追従する
+    stickToBottomRef.current = true;
 
     const history: Message[] = [
       ...prev.filter((m) => !m.error),
@@ -129,63 +156,74 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="messages" aria-label="会話">
-        <div className="messages-inner" aria-live="polite">
-          {messages.length === 0 && (
-            <div className="empty">
-              <p>行政手続きや公的制度について、お気軽にご相談ください。</p>
-              <p>
-                マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
-              </p>
-              <p className="empty-sub">例えば、こんな質問ができます。</p>
-              <div className="examples">
-                {EXAMPLE_QUESTIONS.map((q) => (
-                  <button
-                    key={q}
-                    type="button"
-                    className="example"
-                    onClick={() => send(q)}
-                    disabled={loading}
-                  >
-                    {q}
-                  </button>
-                ))}
+      <div className="messages-wrap">
+        <section
+          className="messages"
+          aria-label="会話"
+          ref={scrollRef}
+          onScroll={handleScroll}
+        >
+          <div className="messages-inner" aria-live="polite">
+            {messages.length === 0 && (
+              <div className="empty">
+                <p>行政手続きや公的制度について、お気軽にご相談ください。</p>
+                <p>
+                  マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
+                </p>
+                <p className="empty-sub">例えば、こんな質問ができます。</p>
+                <div className="examples">
+                  {EXAMPLE_QUESTIONS.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      className="example"
+                      onClick={() => send(q)}
+                      disabled={loading}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+                <button type="button" className="mode-button" onClick={startSupport}>
+                  使える支援制度を探す
+                </button>
+                <p className="note">
+                  いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。
+                </p>
               </div>
-              <button type="button" className="mode-button" onClick={startSupport}>
-                使える支援制度を探す
-              </button>
-              <p className="note">
-                いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。
-              </p>
-            </div>
-          )}
-          {messages.map((m, i) => (
-            <div
-              key={i}
-              className={`message ${m.role}${m.error ? " error" : ""}`}
-            >
-              {m.role === "assistant" && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img className="avatar" src="/bot-avatar.png" alt="" width={40} height={40} />
-              )}
-              <div className="message-body">
-                <span className="message-label">
-                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
-                </span>
-                <div className="bubble" role={m.error ? "alert" : undefined}>
-                  {m.role === "assistant" && m.content && !m.error ? (
-                    <Markdown text={m.content} />
-                  ) : (
-                    m.content ||
-                    (loading ? <span className="typing">回答を作成中…</span> : "")
-                  )}
+            )}
+            {messages.map((m, i) => (
+              <div
+                key={i}
+                className={`message ${m.role}${m.error ? " error" : ""}`}
+              >
+                {m.role === "assistant" && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img className="avatar" src="/bot-avatar.png" alt="" width={40} height={40} />
+                )}
+                <div className="message-body">
+                  <span className="message-label">
+                    {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+                  </span>
+                  <div className="bubble" role={m.error ? "alert" : undefined}>
+                    {m.role === "assistant" && m.content && !m.error ? (
+                      <Markdown text={m.content} />
+                    ) : (
+                      m.content ||
+                      (loading ? <span className="typing">回答を作成中…</span> : "")
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
-          <div ref={bottomRef} />
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+        {showJump && (
+          <button type="button" className="jump-latest" onClick={scrollToBottom}>
+            最新へ移動
+          </button>
+        )}
+      </div>
 
       <form className="composer" onSubmit={handleSubmit}>
         <div className="composer-inner">
