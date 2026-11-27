@@ -767,6 +767,23 @@ a.brand {
   .brand-name small {
     display: none;
   }
+
+  .brand-name {
+    white-space: nowrap;
+  }
+
+  .header-link {
+    text-align: right;
+  }
+
+  /* チャット画面では入力欄下の「詳しく」から辿れるため、狭い画面では省略 */
+  .chat-header .header-link {
+    display: none;
+  }
+
+  .chat-header .header-link + .button-secondary {
+    margin-left: auto;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
