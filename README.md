@@ -25,6 +25,7 @@ http://localhost:3000 を開きます。
 
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）
 - `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による日本語の音声入力。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
+- `app/chatHistory.ts` — 会話履歴の保存・読み込み。会話は**ブラウザの localStorage にのみ保存**し（新しい順に最大 50 件）、サーバーには保存しません。ヘッダーの「会話履歴」から過去の会話を開き直したり、1 件ずつ・すべて削除したりできます。再読み込みすると直前の会話が復元されます
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
 - 支援制度を探す（AI インタビュー）: 最初の画面の「使える支援制度を探す」ボタンで開始。ボットが困りごと・世帯構成・市区町村・収入の目安などを一問ずつ聞き取り、利用できそうな給付・手当・減免・貸付・相談窓口を、申請先・期限・出典つきで一覧表示します。氏名や詳しい住所などの個人情報は聞きません。API には `mode: "support"` を付けて送り、専用のシステムプロンプトに切り替えます
@@ -40,6 +41,7 @@ http://localhost:3000 を開きます。
 - OpenRouter のエラー詳細はクライアントに返さずサーバーログのみに出す
 - OpenRouter に `provider.data_collection: "deny"` を指定し、入力を学習・保存するプロバイダーを使わない
 - CSP・`X-Frame-Options`・HSTS などのセキュリティヘッダー（`next.config.ts`）
+- 会話履歴はサーバーに保存せず、利用者のブラウザ（localStorage）内にのみ保存する
 - Markdown 表示は innerHTML を使わず、リンクは http(s)/mailto のみ許可
 
 運用側で設定してください（コードでは防ぎきれないもの）:
