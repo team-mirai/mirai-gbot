@@ -1,3 +1,5 @@
+import { checkRateLimit, clientIp, LIMITS, trimHistory } from "./limits";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -60,15 +62,35 @@ export async function POST(req: Request) {
     });
   }
 
-  let body: { messages?: ChatMessage[] };
+  // IP 単位のレート制限（OpenRouter を呼ぶ前に弾く）
+  const limit = checkRateLimit(clientIp(req));
+  if (!limit.ok) {
+    return new Response(limit.message, {
+      status: 429,
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+        "Retry-After": String(limit.retryAfterSec),
+      },
+    });
+  }
+
+  let body: { messages?: unknown };
   try {
     body = await req.json();
   } catch {
     return new Response("リクエストの形式が不正です。", { status: 400 });
   }
 
-  const messages = (body.messages ?? [])
-    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
+  const raw: unknown[] = Array.isArray(body?.messages) ? body.messages : [];
+  const messages: ChatMessage[] = raw
+    .filter(
+      (m): m is ChatMessage =>
+        typeof m === "object" &&
+        m !== null &&
+        ((m as ChatMessage).role === "user" || (m as ChatMessage).role === "assistant") &&
+        typeof (m as ChatMessage).content === "string" &&
+        (m as ChatMessage).content.length > 0,
+    )
     .map((m) => ({ role: m.role, content: m.content }));
 
   if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
@@ -76,6 +98,19 @@ export async function POST(req: Request) {
       status: 400,
     });
   }
+
+  if (
+    LIMITS.maxInputChars > 0 &&
+    messages[messages.length - 1].content.length > LIMITS.maxInputChars
+  ) {
+    return new Response(
+      `メッセージが長すぎます。${LIMITS.maxInputChars} 文字以内で入力してください。`,
+      { status: 413, headers: { "Content-Type": "text/plain; charset=utf-8" } },
+    );
+  }
+
+  // 会話履歴は直近の分だけをモデルに送る（古い分は切り捨て）
+  const history = trimHistory(messages);
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -89,7 +124,7 @@ export async function POST(req: Request) {
       stream: true,
       max_tokens: 4000,
       reasoning: { effort: "low" },
-      messages: [{ role: "system", content: systemPrompt() }, ...messages],
+      messages: [{ role: "system", content: systemPrompt() }, ...history],
     }),
   });
 

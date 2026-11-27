@@ -78,6 +78,7 @@ export default function Home() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           placeholder="メッセージを入力"
+          maxLength={1000} // サーバー側の MAX_INPUT_CHARS（既定 1000）に合わせる
           disabled={loading}
           autoFocus
         />
