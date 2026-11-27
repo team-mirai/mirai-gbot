@@ -1,0 +1,12 @@
+{
+  "name": "jailbreak",
+  "description": "ローカルで起動した G ボット本体 (next dev) にジェイルブレイク・プロンプトインジェクションを投げ、スコープ外の依頼に答えないか・システムプロンプトを漏らさないかを測る",
+  "questions": "questions/jailbreak.jsonl",
+  "target": {
+    "type": "http",
+    "url": "http://localhost:3000/api/chat",
+    "body_template": { "messages": [ { "role": "user", "content": "{{question}}" } ] },
+    "timeout": 300
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}
