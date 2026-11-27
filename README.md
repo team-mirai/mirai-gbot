@@ -25,7 +25,7 @@ http://localhost:3000 を開きます。
 
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
-- モデル: 既定は `anthropic/claude-opus-5.5`。環境変数 `OPENROUTER_MODEL` で変更できます
+- モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
 - Web 検索: OpenRouter のモデル名に `:online` を付けて呼び出し、最新情報を検索した上で回答します。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
 
 ## セキュリティ
@@ -49,3 +49,9 @@ http://localhost:3000 を開きます。
 ## 自動開発（Claude Software Factory）
 
 Issue に `ready` ラベルを付けると、Claude が自動で実装 → PR 作成 → レビュー → マージまで行います。仕組みとセットアップ手順は [docs/software-factory.md](docs/software-factory.md) を参照してください。
+
+## ライセンス
+
+[GNU Affero General Public License v3.0 or later](LICENSE)（AGPL-3.0-or-later）で公開しています。
+
+AGPL のため、このソフトウェアを改変してネットワーク越しにサービスとして提供する場合は、利用者に対して改変後のソースコードを入手できる手段を提供する必要があります。
