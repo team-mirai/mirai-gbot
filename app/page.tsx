@@ -10,6 +10,18 @@ type Mode = "chat" | "support";
 
 const SUPPORT_START = "使える支援制度を探したいです。";
 
+// チャット画面に入ったときに積む履歴エントリーの目印。
+// トップとチャットは同じ URL の 1 ページなので、ブラウザの「戻る」でトップに戻れるよう履歴を自前で積む
+const CHAT_HISTORY_STATE = "mirai-gbot:chat";
+
+function isChatHistoryEntry(state: unknown): boolean {
+  return (
+    typeof state === "object" &&
+    state !== null &&
+    (state as Record<string, unknown>).view === CHAT_HISTORY_STATE
+  );
+}
+
 // 文字サイズ（html 要素の data-font-size 属性で切り替え。DADS の文字サイズは rem 指定なので追従する）
 const FONT_SIZES = [
   { value: "normal", label: "標準" },
@@ -70,6 +82,8 @@ export default function Home() {
   const [fontSize, setFontSize] = useState<FontSize>("normal");
   const [easyJapanese, setEasyJapanese] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+  // 回答の受信中にトップへ戻ったとき、ストリーミングを中断するためのコントローラー
+  const abortRef = useRef<AbortController | null>(null);
   const inChat = messages.length > 0;
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
@@ -119,6 +133,36 @@ export default function Home() {
     return () => clearInterval(id);
   }, [inChat]);
 
+  // ブラウザの「戻る」でチャット画面の履歴エントリーから外れたらトップに戻す
+  const cancelSpeech = speech.cancel;
+  useEffect(() => {
+    function onPopState(e: PopStateEvent) {
+      if (isChatHistoryEntry(e.state)) return;
+      abortRef.current?.abort();
+      abortRef.current = null;
+      cancelSpeech();
+      setLoading(false);
+      setMode("chat");
+      setMessages([]);
+      setInput("");
+      window.scrollTo({ top: 0 });
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [cancelSpeech]);
+
+  // トップからチャット画面に入るときに履歴を 1 つ積む
+  // （「進む」で戻ってきたチャット用エントリー上にいる場合は積み増さず置き換える）
+  // （Next.js が pushState / replaceState を差し替えて内部用の状態を引き継ぐので、目印だけ渡せばよい）
+  function enterChatHistory() {
+    const state = { view: CHAT_HISTORY_STATE };
+    if (isChatHistoryEntry(window.history.state)) {
+      window.history.replaceState(state, "");
+    } else {
+      window.history.pushState(state, "");
+    }
+  }
+
   // 支援制度探しモードを新しい会話として始める（それまでの相談内容は送らない）
   function startSupport() {
     if (loading) return;
@@ -130,6 +174,10 @@ export default function Home() {
     const text = rawText.trim();
     if (!text || loading) return;
     speech.cancel();
+    if (!inChat) enterChatHistory();
+
+    const controller = new AbortController();
+    abortRef.current = controller;
 
     const history: Message[] = [
       ...prev.filter((m) => !m.error),
@@ -148,6 +196,7 @@ export default function Home() {
           mode: currentMode,
           easyJapanese,
         }),
+        signal: controller.signal,
       });
 
       if (!res.ok || !res.body) {
@@ -164,10 +213,15 @@ export default function Home() {
         setMessages([...history, { role: "assistant", content: reply }]);
       }
     } catch (err) {
+      // トップに戻って中断した場合は何も表示しない
+      if (controller.signal.aborted) return;
       const msg = err instanceof Error && err.message ? err.message : "エラーが発生しました。";
       setMessages([...history, { role: "assistant", content: msg, error: true }]);
     } finally {
-      setLoading(false);
+      if (abortRef.current === controller) {
+        abortRef.current = null;
+        setLoading(false);
+      }
     }
   }
 
@@ -178,6 +232,11 @@ export default function Home() {
 
   function reset() {
     if (loading) return;
+    // チャット用の履歴エントリー上なら「戻る」と同じ扱いにする（popstate でトップに戻る）
+    if (isChatHistoryEntry(window.history.state)) {
+      window.history.back();
+      return;
+    }
     speech.cancel();
     setMode("chat");
     setMessages([]);
