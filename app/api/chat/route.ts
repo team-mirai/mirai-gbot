@@ -14,11 +14,33 @@ export const maxDuration = 60;
 // OpenRouter 経由で LLM を呼び出す（OpenAI 互換の Chat Completions API）
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 const BASE_MODEL = process.env.OPENROUTER_MODEL ?? "openai/gpt-6-luna";
-// Web 検索: モデル名に ":online" を付けると OpenRouter が検索結果を付けて呼び出す。
+// Web 検索: OpenRouter の web プラグインで検索結果を付けて呼び出す。
 // OPENROUTER_WEB_SEARCH=false で無効化できる（既定は有効）。
 const WEB_SEARCH = process.env.OPENROUTER_WEB_SEARCH !== "false";
-const MODEL =
-  WEB_SEARCH && !BASE_MODEL.endsWith(":online") ? `${BASE_MODEL}:online` : BASE_MODEL;
+// 互換のため、モデル名に ":online" が付いていたら外す（検索はプラグインで明示的に設定する）
+const MODEL = BASE_MODEL.replace(/:online$/, "");
+
+// 検索対象にするドメイン（政府・自治体の公式ドメインのみ）。
+// go.jp: 中央省庁など政府機関、lg.jp: 地方公共団体。
+// 環境変数 SEARCH_ALLOWED_DOMAINS（カンマ区切り）で上書きできる。
+const ALLOWED_DOMAINS = (process.env.SEARCH_ALLOWED_DOMAINS ?? "go.jp,lg.jp")
+  .split(",")
+  .map((d) => d.trim().toLowerCase().replace(/^\*\./, ""))
+  .filter(Boolean);
+
+// 検索エンジンにはドメイン自身とサブドメインの両方を指定する
+const INCLUDE_DOMAINS = ALLOWED_DOMAINS.flatMap((d) => [d, `*.${d}`]);
+
+// URL が許可ドメイン（またはそのサブドメイン）かどうか
+function isAllowedUrl(url: string): boolean {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+  return ALLOWED_DOMAINS.some((d) => host === d || host.endsWith(`.${d}`));
+}
 
 // ボット自身についての情報。「あなたは誰？」「無料？」「何ができる？」などにはこれだけを根拠に答えさせる。
 const BOT_PROFILE = [
@@ -53,7 +75,8 @@ function systemPrompt() {
     "- 全部を一度に説明しようとせず、要点だけ答えて、必要なら「〇〇についても詳しく話しましょうか？」と続きを聞く。",
     "- ユーザーが詳しい説明・一覧・手順などを明示的に求めたときだけ、長めに答えてよい。",
     WEB_SEARCH
-      ? "Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答えてください。出典は本文中に [サイト名](URL) の形で 1〜2 個だけ添え、URL をそのまま貼らないでください。検索結果で確認できないことは推測と明示してください。"
+      ? `Web 検索は政府・自治体の公式サイト（${ALLOWED_DOMAINS.join(" / ")} ドメイン）だけを対象にしています。Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答えてください。出典として示してよいのはこれらの公式サイトだけです。それ以外のサイト（民間のまとめサイト・ブログ・ニュースサイト等）を出典として示したり、そこにある情報を根拠にしたりしないでください。`
+      + "出典は本文中に [サイト名](URL) の形で 1〜2 個だけ添え、URL をそのまま貼らないでください。検索結果で確認できないことは推測と明示してください。"
       : "",
   ]
     .filter(Boolean)
@@ -136,6 +159,9 @@ export async function POST(req: Request) {
       // 行政相談は個人情報を含みうるため、入力を学習・保存に使うプロバイダーへはルーティングしない
       provider: { data_collection: "deny" },
       messages: [{ role: "system", content: systemPrompt() }, ...messages],
+      ...(WEB_SEARCH
+        ? { plugins: [{ id: "web", include_domains: INCLUDE_DOMAINS }] }
+        : {}),
     }),
   });
 
@@ -201,7 +227,13 @@ export async function POST(req: Request) {
             const delta = chunk.choices?.[0]?.delta;
             for (const a of delta?.annotations ?? []) {
               const url = a.url_citation?.url && safeCitationUrl(a.url_citation.url);
-              if (a.type === "url_citation" && url && !citations.has(url)) {
+              // 念のため許可ドメイン以外の出典は表示しない
+              if (
+                a.type === "url_citation" &&
+                url &&
+                isAllowedUrl(url) &&
+                !citations.has(url)
+              ) {
                 citations.set(url, { url, title: a.url_citation?.title });
               }
             }
