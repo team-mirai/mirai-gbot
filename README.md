@@ -33,8 +33,8 @@ http://localhost:3000 を開きます。
 
 アプリ側で行っている対策:
 
-- `/api/chat` の入力検証: 文字列以外の content を拒否、1 メッセージ 2000 文字・履歴 20 件・本文 64KB まで
-- IP ごとの簡易レート制限（既定 10 回/分、`RATE_LIMIT_PER_MINUTE` で変更、0 で無効）
+- `/api/chat` の入力検証: 文字列以外の content を拒否、1 メッセージ 2000 文字・履歴 20 件・本文 64KB まで（下記「不正利用・コスト対策」の環境変数で変更可）
+- IP ごとの簡易レート制限（既定 10 回/分・100 回/日）
 - 他サイトからのブラウザ経由の呼び出し（`Sec-Fetch-Site: cross-site` / Origin 不一致）を拒否
 - OpenRouter のエラー詳細はクライアントに返さずサーバーログのみに出す
 - OpenRouter に `provider.data_collection: "deny"` を指定し、入力を学習・保存するプロバイダーを使わない
@@ -46,6 +46,29 @@ http://localhost:3000 を開きます。
 - **OpenRouter の API キーに利用上限（クレジット上限）を設定**する。`/api/chat` は認証なしの公開エンドポイントなので、上限が最後の砦になります
 - **Vercel Firewall でレート制限ルールを追加**する（例: `/api/chat` に IP あたり 10 回/分）。アプリ内のレート制限はインスタンスごとのメモリなので完全ではありません
 - 必要なら Vercel の Bot Protection / Attack Challenge Mode を有効にする
+
+## 不正利用・コスト対策
+
+`/api/chat` は 1 回ごとに OpenRouter の従量課金が発生するため、次の制限を入れています（`app/api/chat/guard.ts`）。値は環境変数で変更でき、`0` で無効になります。
+
+| 環境変数 | 既定値 | 内容 |
+| --- | --- | --- |
+| `RATE_LIMIT_PER_MINUTE` | 10 | IP あたり 1 分間のリクエスト上限。超えると 429 |
+| `RATE_LIMIT_PER_DAY` | 100 | IP あたり 1 日のリクエスト上限。超えると 429 |
+| `MAX_INPUT_CHARS` | 2000 | 1 メッセージの最大文字数。超えると 400 |
+| `MAX_HISTORY_MESSAGES` | 20 | モデルに送る会話履歴の最大件数（古い分は切り捨て） |
+| `MAX_HISTORY_CHARS` | 12000 | モデルに送る会話履歴の合計最大文字数（古い分は切り捨て） |
+
+レート制限のカウンタはサーバーのメモリ上に持っているため、Vercel のように複数インスタンスで動く環境やコールドスタート後はカウントが分散・リセットされます。あくまで目安の上限なので、**確実な上限として OpenRouter 側でも利用上限を設定してください**。
+
+### OpenRouter の利用上限を設定する
+
+1. [OpenRouter の Keys ページ](https://openrouter.ai/settings/keys) で本番用の API キーを開き（または新しく作成し）、**Credit limit** に上限額（例: 月の予算）を設定する
+2. 上限に達するとそのキーでのリクエストは失敗するので、ボットはエラーを返して止まり、それ以上は課金されない
+3. 自動チャージ（Auto top-up）を使う場合は、チャージ額・上限も予算に合わせておく
+4. [Activity ページ](https://openrouter.ai/activity) で利用状況を定期的に確認する
+
+さらに強い対策が必要になった場合は、Vercel Firewall のレート制限ルールや Bot 対策（Attack Challenge Mode / BotID）、Cloudflare Turnstile の導入を検討してください。
 
 ## 自動開発（Claude Software Factory）
 

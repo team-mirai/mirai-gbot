@@ -119,7 +119,7 @@ export async function POST(req: Request) {
 
   const limited = rateLimit(clientIp(req));
   if (!limited.ok) {
-    return plain("リクエストが多すぎます。しばらく待ってからお試しください。", 429, {
+    return plain(limited.message, 429, {
       "Retry-After": String(limited.retryAfter),
     });
   }
