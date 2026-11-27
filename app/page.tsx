@@ -26,17 +26,6 @@ const SUGGESTIONS = [
   "確定申告が必要なのはどんな人？",
 ];
 
-const TOPICS = [
-  { title: "くらし・住まい", desc: "転入・転出、住民票、戸籍", q: "転入届の出し方と必要なものを教えて" },
-  { title: "子育て・教育", desc: "出産、児童手当、保育園", q: "子どもが生まれたら必要な手続きは？" },
-  { title: "税金", desc: "確定申告、住民税、控除", q: "確定申告のやり方をざっくり教えて" },
-  { title: "年金・保険", desc: "国民年金、健康保険", q: "会社を辞めたら年金と健康保険はどうなる？" },
-  { title: "健康・福祉", desc: "介護、障害福祉、医療費", q: "親の介護が必要になったらまず何をすればいい？" },
-  { title: "仕事", desc: "失業給付、職業訓練", q: "失業手当をもらうための手続きは？" },
-  { title: "防災・災害", desc: "避難、被災者支援", q: "災害で家が被害を受けたときに使える支援は？" },
-  { title: "マイナンバー", desc: "カード、マイナポータル", q: "マイナンバーカードでできることは？" },
-];
-
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -245,25 +234,6 @@ export default function Home() {
                   いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。
                 </p>
               </div>
-            </div>
-          </section>
-
-          <section className="topics" aria-labelledby="topics-title">
-            <div className="section-inner">
-              <h2 id="topics-title">テーマから探す</h2>
-              <ul className="topic-grid">
-                {TOPICS.map((t) => (
-                  <li key={t.title}>
-                    <button type="button" className="topic" onClick={() => send(t.q)}>
-                      <span className="topic-title">{t.title}</span>
-                      <span className="topic-desc">{t.desc}</span>
-                      <span className="topic-arrow" aria-hidden="true">
-                        →
-                      </span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
             </div>
           </section>
         </main>
