@@ -27,3 +27,7 @@ http://localhost:3000 を開きます。
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `anthropic/claude-opus-5.5`。環境変数 `OPENROUTER_MODEL` で変更できます
 - Web 検索: OpenRouter のモデル名に `:online` を付けて呼び出し、最新情報を検索した上で回答します。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
+
+## 自動開発（Claude Software Factory）
+
+Issue に `ready` ラベルを付けると、Claude が自動で実装 → PR 作成 → レビュー → マージまで行います。仕組みとセットアップ手順は [docs/software-factory.md](docs/software-factory.md) を参照してください。
