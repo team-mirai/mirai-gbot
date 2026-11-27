@@ -1,9 +1,9 @@
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// OpenRouter 経由で Claude を呼び出す（OpenAI 互換の Chat Completions API）
+// OpenRouter 経由で LLM を呼び出す（OpenAI 互換の Chat Completions API）
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const BASE_MODEL = process.env.OPENROUTER_MODEL ?? "anthropic/claude-opus-5.5";
+const BASE_MODEL = process.env.OPENROUTER_MODEL ?? "openai/gpt-6-luna";
 // Web 検索: モデル名に ":online" を付けると OpenRouter が検索結果を付けて呼び出す。
 // OPENROUTER_WEB_SEARCH=false で無効化できる（既定は有効）。
 const WEB_SEARCH = process.env.OPENROUTER_WEB_SEARCH !== "false";
