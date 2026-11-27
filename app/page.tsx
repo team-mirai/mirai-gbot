@@ -5,6 +5,10 @@ import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
+// "chat": 通常の行政相談 / "support": 使える支援制度を探す（AI インタビュー）
+type Mode = "chat" | "support";
+
+const SUPPORT_START = "使える支援制度を探したいです。";
 
 const GREETINGS: [string, string][] = [
   ["こんにちは", "。"],
@@ -38,6 +42,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [greeting, setGreeting] = useState(0);
+  const [mode, setMode] = useState<Mode>("chat");
   const bottomRef = useRef<HTMLDivElement>(null);
   const inChat = messages.length > 0;
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
@@ -66,13 +71,20 @@ export default function Home() {
     return () => clearInterval(id);
   }, [inChat]);
 
-  async function send(raw: string) {
-    const text = raw.trim();
+  // 支援制度探しモードを新しい会話として始める（それまでの相談内容は送らない）
+  function startSupport() {
+    if (loading) return;
+    setMode("support");
+    send(SUPPORT_START, [], "support");
+  }
+
+  async function send(rawText: string, prev: Message[] = messages, currentMode: Mode = mode) {
+    const text = rawText.trim();
     if (!text || loading) return;
     speech.cancel();
 
     const history: Message[] = [
-      ...messages.filter((m) => !m.error),
+      ...prev.filter((m) => !m.error),
       { role: "user", content: text },
     ];
     setMessages([...history, { role: "assistant", content: "" }]);
@@ -84,7 +96,8 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          messages: history.map(({ role, content }) => ({ role, content })),
+          messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
+          mode: currentMode,
         }),
       });
 
@@ -117,6 +130,7 @@ export default function Home() {
   function reset() {
     if (loading) return;
     speech.cancel();
+    setMode("chat");
     setMessages([]);
     setInput("");
     window.scrollTo({ top: 0 });
@@ -222,6 +236,15 @@ export default function Home() {
                   ))}
                 </ul>
               </div>
+
+              <div className="support-cta">
+                <button type="button" className="support-button" onClick={startSupport}>
+                  使える支援制度を探す
+                </button>
+                <p>
+                  いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。
+                </p>
+              </div>
             </div>
           </section>
 
@@ -261,6 +284,7 @@ export default function Home() {
       <header className="header">
         <div className="header-inner chat-header">
           {brand}
+          {mode === "support" && <span className="mode-badge">支援制度を探す</span>}
           <button type="button" className="button-secondary" onClick={reset} disabled={loading}>
             新しい相談
           </button>
@@ -270,16 +294,26 @@ export default function Home() {
       <main className="messages" aria-label="会話">
         <div className="messages-inner" aria-live="polite">
           {messages.map((m, i) => (
-            <div key={i} className={`message ${m.role}${m.error ? " error" : ""}`}>
-              <span className="message-label">
-                {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
-              </span>
-              <div className="bubble" role={m.error ? "alert" : undefined}>
-                {m.role === "assistant" && m.content && !m.error ? (
-                  <Markdown text={m.content} />
-                ) : (
-                  m.content || (loading ? <span className="typing">回答を作成中…</span> : "")
-                )}
+            <div
+              key={i}
+              className={`message ${m.role}${m.error ? " error" : ""}`}
+            >
+              {m.role === "assistant" && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="avatar" src="/bot-avatar.png" alt="" width={40} height={40} />
+              )}
+              <div className="message-body">
+                <span className="message-label">
+                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+                </span>
+                <div className="bubble" role={m.error ? "alert" : undefined}>
+                  {m.role === "assistant" && m.content && !m.error ? (
+                    <Markdown text={m.content} />
+                  ) : (
+                    m.content ||
+                    (loading ? <span className="typing">回答を作成中…</span> : "")
+                  )}
+                </div>
               </div>
             </div>
           ))}
@@ -297,7 +331,13 @@ export default function Home() {
             className="text-field"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder={speech.listening ? "お話しください…" : "続けて質問する"}
+            placeholder={
+              speech.listening
+                ? "お話しください…"
+                : mode === "support"
+                  ? "状況を入力（個人情報は不要です）"
+                  : "続けて質問する"
+            }
             disabled={loading}
             autoComplete="off"
             maxLength={2000}
