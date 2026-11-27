@@ -5,6 +5,12 @@ import { Markdown } from "./Markdown";
 
 type Message = { role: "user" | "assistant"; content: string };
 
+const EXAMPLE_QUESTIONS = [
+  "住民票の取り方を教えてください",
+  "マイナンバーカードをなくしたときはどうすればいいですか？",
+  "引っ越しのときに必要な手続きを教えてください",
+];
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -15,9 +21,13 @@ export default function Home() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const text = input.trim();
+    send(input);
+  }
+
+  async function send(rawText: string) {
+    const text = rawText.trim();
     if (!text || loading) return;
 
     const history: Message[] = [...messages, { role: "user", content: text }];
@@ -55,11 +65,32 @@ export default function Home() {
 
   return (
     <main className="container">
-      <header className="header">mirai-gbot</header>
+      <header className="header">
+        <div className="header-title">mirai-gbot</div>
+        <p className="header-desc">
+          行政手続きや公的制度についての疑問に答える、行政相談用のチャットボットです。
+        </p>
+      </header>
 
       <div className="messages">
         {messages.length === 0 && (
-          <p className="empty">何でも聞いてください。</p>
+          <div className="empty">
+            <p>行政手続きや公的制度について、お気軽にご相談ください。</p>
+            <p className="empty-sub">例えば、こんな質問ができます。</p>
+            <div className="examples">
+              {EXAMPLE_QUESTIONS.map((q) => (
+                <button
+                  key={q}
+                  type="button"
+                  className="example"
+                  onClick={() => send(q)}
+                  disabled={loading}
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
+          </div>
         )}
         {messages.map((m, i) => (
           <div key={i} className={`bubble ${m.role}`}>
