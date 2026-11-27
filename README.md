@@ -28,6 +28,24 @@ http://localhost:3000 を開きます。
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
 - Web 検索: OpenRouter のモデル名に `:online` を付けて呼び出し、最新情報を検索した上で回答します。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
 
+## セキュリティ
+
+アプリ側で行っている対策:
+
+- `/api/chat` の入力検証: 文字列以外の content を拒否、1 メッセージ 2000 文字・履歴 20 件・本文 64KB まで
+- IP ごとの簡易レート制限（既定 10 回/分、`RATE_LIMIT_PER_MINUTE` で変更、0 で無効）
+- 他サイトからのブラウザ経由の呼び出し（`Sec-Fetch-Site: cross-site` / Origin 不一致）を拒否
+- OpenRouter のエラー詳細はクライアントに返さずサーバーログのみに出す
+- OpenRouter に `provider.data_collection: "deny"` を指定し、入力を学習・保存するプロバイダーを使わない
+- CSP・`X-Frame-Options`・HSTS などのセキュリティヘッダー（`next.config.ts`）
+- Markdown 表示は innerHTML を使わず、リンクは http(s)/mailto のみ許可
+
+運用側で設定してください（コードでは防ぎきれないもの）:
+
+- **OpenRouter の API キーに利用上限（クレジット上限）を設定**する。`/api/chat` は認証なしの公開エンドポイントなので、上限が最後の砦になります
+- **Vercel Firewall でレート制限ルールを追加**する（例: `/api/chat` に IP あたり 10 回/分）。アプリ内のレート制限はインスタンスごとのメモリなので完全ではありません
+- 必要なら Vercel の Bot Protection / Attack Challenge Mode を有効にする
+
 ## 自動開発（Claude Software Factory）
 
 Issue に `ready` ラベルを付けると、Claude が自動で実装 → PR 作成 → レビュー → マージまで行います。仕組みとセットアップ手順は [docs/software-factory.md](docs/software-factory.md) を参照してください。

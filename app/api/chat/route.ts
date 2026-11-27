@@ -1,3 +1,13 @@
+import {
+  type ChatMessage,
+  LIMITS,
+  clientIp,
+  isCrossSite,
+  parseMessages,
+  rateLimit,
+  safeCitationUrl,
+} from "./guard";
+
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
@@ -63,35 +73,56 @@ function linkLabel(c: Citation): string {
   }
 }
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
+function plain(text: string, status: number, headers: Record<string, string> = {}) {
+  return new Response(text, {
+    status,
+    headers: { "Content-Type": "text/plain; charset=utf-8", "Cache-Control": "no-store", ...headers },
+  });
+}
 
 export async function POST(req: Request) {
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
-    return new Response("OPENROUTER_API_KEY が設定されていません。", {
-      status: 500,
+    console.error("OPENROUTER_API_KEY is not set");
+    return plain("サーバーの設定に問題があります。", 500);
+  }
+
+  if (isCrossSite(req)) {
+    return plain("許可されていない送信元です。", 403);
+  }
+  if (!(req.headers.get("content-type") ?? "").includes("application/json")) {
+    return plain("リクエストの形式が不正です。", 415);
+  }
+
+  const limited = rateLimit(clientIp(req));
+  if (!limited.ok) {
+    return plain("リクエストが多すぎます。しばらく待ってからお試しください。", 429, {
+      "Retry-After": String(limited.retryAfter),
     });
   }
 
-  let body: { messages?: ChatMessage[] };
+  if (Number(req.headers.get("content-length") ?? "0") > LIMITS.bodyBytes) {
+    return plain("リクエストが大きすぎます。", 413);
+  }
+  let raw: unknown;
   try {
-    body = await req.json();
+    const text = await req.text();
+    if (new TextEncoder().encode(text).length > LIMITS.bodyBytes) {
+      return plain("リクエストが大きすぎます。", 413);
+    }
+    raw = JSON.parse(text);
   } catch {
-    return new Response("リクエストの形式が不正です。", { status: 400 });
+    return plain("リクエストの形式が不正です。", 400);
   }
 
-  const messages = (body.messages ?? [])
-    .filter((m) => (m.role === "user" || m.role === "assistant") && m.content)
-    .map((m) => ({ role: m.role, content: m.content }));
-
-  if (messages.length === 0 || messages[messages.length - 1].role !== "user") {
-    return new Response("最後のメッセージはユーザーの発言である必要があります。", {
-      status: 400,
-    });
-  }
+  const parsed = parseMessages(raw);
+  if (!parsed.ok) return plain(parsed.error, 400);
+  const messages: ChatMessage[] = parsed.messages;
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
+    // クライアントが切断したら上流の生成も止める（無駄なトークン消費を防ぐ）
+    signal: req.signal,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
@@ -102,16 +133,22 @@ export async function POST(req: Request) {
       stream: true,
       max_tokens: 4000,
       reasoning: { effort: "low" },
+      // 行政相談は個人情報を含みうるため、入力を学習・保存に使うプロバイダーへはルーティングしない
+      provider: { data_collection: "deny" },
       messages: [{ role: "system", content: systemPrompt() }, ...messages],
     }),
   });
 
   if (!upstream.ok || !upstream.body) {
     const detail = await upstream.text().catch(() => "");
-    console.error("OpenRouter error", upstream.status, detail);
-    return new Response(`OpenRouter エラー (${upstream.status}): ${detail}`, {
-      status: 502,
-    });
+    console.error("OpenRouter error", upstream.status, detail.slice(0, 500));
+    // 上流のエラー詳細（アカウント・設定情報を含みうる）はクライアントに返さない
+    return plain(
+      upstream.status === 429
+        ? "混み合っています。しばらく待ってからお試しください。"
+        : "回答の生成に失敗しました。時間をおいてお試しください。",
+      502,
+    );
   }
 
   // OpenRouter の SSE を読み、本文テキストだけをクライアントへ流す
@@ -157,14 +194,13 @@ export async function POST(req: Request) {
             }
 
             if (chunk.error) {
-              controller.enqueue(
-                encoder.encode(`\n\n[エラー: ${chunk.error.message ?? "不明"}]`),
-              );
+              console.error("OpenRouter stream error", chunk.error.message);
+              controller.enqueue(encoder.encode("\n\n[エラーが発生しました。]"));
               continue;
             }
             const delta = chunk.choices?.[0]?.delta;
             for (const a of delta?.annotations ?? []) {
-              const url = a.url_citation?.url;
+              const url = a.url_citation?.url && safeCitationUrl(a.url_citation.url);
               if (a.type === "url_citation" && url && !citations.has(url)) {
                 citations.set(url, { url, title: a.url_citation?.title });
               }
@@ -196,7 +232,7 @@ export async function POST(req: Request) {
   return new Response(stream, {
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": "no-cache",
+      "Cache-Control": "no-store",
     },
   });
 }

@@ -32,8 +32,9 @@ export default function Home() {
       const res = await fetch("/api/chat", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        // サーバー側の上限（20 件）に合わせて直近の履歴だけ送る
         body: JSON.stringify({
-          messages: history.map(({ role, content }) => ({ role, content })),
+          messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
         }),
       });
 
@@ -70,7 +71,11 @@ export default function Home() {
       <section className="messages" aria-label="会話">
         <div className="messages-inner" aria-live="polite">
           {messages.length === 0 && (
-            <p className="empty">何でも聞いてください。</p>
+            <p className="empty">
+              行政手続きや公的制度について聞いてください。
+              <br />
+              マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
+            </p>
           )}
           {messages.map((m, i) => (
             <div
@@ -107,6 +112,7 @@ export default function Home() {
             placeholder="メッセージを入力"
             disabled={loading}
             autoComplete="off"
+            maxLength={2000}
             autoFocus
           />
           <button
