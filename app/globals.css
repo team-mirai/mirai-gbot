@@ -74,35 +74,45 @@ body {
 .header-inner {
   max-width: 800px;
   margin: 0 auto;
-  padding: 16px;
+  padding: 12px 16px;
   display: flex;
-  align-items: baseline;
+  align-items: center;
   gap: 16px;
 }
 
-.header-title {
-  margin: 0;
+/* ブランド（トップに戻る） */
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0;
+  font: inherit;
+  text-align: left;
+  color: var(--key);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+
+.brand-name {
+  display: flex;
+  flex-direction: column;
   /* Std-20B-150 */
   font-size: var(--font-size-20);
   font-weight: var(--font-weight-700);
-  line-height: var(--line-height-150);
+  line-height: var(--line-height-130);
   color: var(--color-neutral-solid-gray-900);
 }
 
-.header-description {
-  margin: 0;
+.brand-name small {
   /* Dns-14N-130 */
   font-size: var(--font-size-14);
-  line-height: var(--line-height-130);
+  font-weight: var(--font-weight-400);
   color: var(--text-description);
 }
 
-a.header-title {
+a.brand {
   text-decoration: none;
-}
-
-a.header-title:hover {
-  text-decoration: underline;
 }
 
 .header-link {
@@ -117,6 +127,18 @@ a.header-title:hover {
   color: var(--key-active);
 }
 
+.chat-header {
+  align-items: center;
+}
+
+.chat-header .button-secondary {
+  margin-left: auto;
+}
+
+.chat-header .header-link + .button-secondary {
+  margin-left: 0;
+}
+
 .mode-badge {
   padding: 2px 8px;
   /* Oln-14B-100 */
@@ -126,37 +148,6 @@ a.header-title:hover {
   color: var(--key);
   background: var(--key-tint);
   border-radius: var(--border-radius-8);
-}
-
-/* DADS ボタン（テキスト・S サイズ） */
-.header-button {
-  margin-left: auto;
-  align-self: center;
-  min-height: 36px;
-  padding: 0 12px;
-  font: inherit;
-  font-size: var(--font-size-14);
-  color: var(--key);
-  background: var(--bg-base);
-  border: 1px solid var(--key);
-  border-radius: var(--border-radius-8);
-  cursor: pointer;
-}
-
-.header-link + .header-button {
-  margin-left: 0;
-}
-
-.header-button:hover:not(:disabled) {
-  background: var(--key-tint);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.header-button:disabled {
-  color: var(--color-neutral-solid-gray-300);
-  border-color: var(--color-neutral-solid-gray-300);
-  cursor: not-allowed;
 }
 
 /* メッセージ一覧 */
@@ -173,12 +164,6 @@ a.header-title:hover {
   display: flex;
   flex-direction: column;
   gap: 16px;
-}
-
-.empty {
-  margin: 40px 0 0;
-  text-align: center;
-  color: var(--text-description);
 }
 
 .message {
@@ -472,8 +457,327 @@ a.header-title:hover {
   cursor: not-allowed;
 }
 
+/* DADS ボタン（セカンダリ・S サイズ: 高さ 40px） */
+.button-secondary {
+  flex: none;
+  height: 40px;
+  padding: 0 16px;
+  font: inherit;
+  font-size: var(--font-size-16);
+  font-weight: var(--font-weight-700);
+  line-height: var(--line-height-100);
+  color: var(--key);
+  background: var(--bg-base);
+  border: 1px solid var(--key);
+  border-radius: var(--border-radius-8);
+  cursor: pointer;
+}
+
+.button-secondary:hover:not(:disabled) {
+  color: var(--key-hover);
+  background: var(--key-tint);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.button-secondary:disabled {
+  color: var(--color-neutral-solid-gray-300);
+  border-color: var(--color-neutral-solid-gray-300);
+  cursor: not-allowed;
+}
+
+/* ===== トップページ（ランディング） ===== */
+
+.landing {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.landing > main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.landing-notice {
+  padding: 8px 16px;
+  text-align: center;
+  /* Dns-14N-130 */
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-130);
+  color: var(--text-description);
+  background: var(--bg-subtle);
+  border-bottom: 1px solid var(--color-neutral-solid-gray-200);
+}
+
+.section-inner,
+.hero-inner {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+/* ヒーロー: 大きな挨拶 + 中央の質問欄 */
+.hero {
+  color: var(--color-neutral-white);
+  background: var(--color-key-1100);
+  border-bottom: 8px solid var(--color-key-600);
+}
+
+.hero-inner {
+  padding-top: clamp(56px, 10vw, 104px);
+  padding-bottom: clamp(56px, 9vw, 96px);
+  text-align: center;
+}
+
+.hello {
+  margin: 0;
+  /* Dsp-64B-140 相当（小画面では縮小） */
+  font-size: clamp(var(--font-size-45), 9vw, 88px);
+  font-weight: var(--font-weight-700);
+  line-height: var(--line-height-120);
+  letter-spacing: 0;
+  min-height: 1.2em;
+}
+
+.hello-word {
+  display: inline-block;
+  animation: fade-up 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.hero-lead {
+  margin: 16px auto 40px;
+  max-width: 36em;
+  /* Std-22N-150 */
+  font-size: clamp(var(--font-size-18), 2.2vw, var(--font-size-22));
+  line-height: var(--line-height-150);
+  color: var(--color-key-50);
+}
+
+.ask {
+  display: flex;
+  gap: 8px;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px;
+  background: var(--bg-base);
+  border-radius: var(--border-radius-12);
+}
+
+/* DADS インプットテキスト（L サイズ: 高さ 56px） */
+.ask-field {
+  height: 56px;
+  font-size: var(--font-size-18);
+}
+
+.ask-button {
+  height: 56px;
+  min-width: 128px;
+  font-size: var(--font-size-18);
+}
+
+.suggestions {
+  margin-top: 32px;
+}
+
+.suggestions-label {
+  margin: 0 0 12px;
+  font-size: var(--font-size-14);
+  font-weight: var(--font-weight-700);
+  color: var(--color-key-100);
+}
+
+.suggestions ul {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chip {
+  min-height: 40px;
+  padding: 6px 16px;
+  font: inherit;
+  font-size: var(--font-size-16);
+  line-height: var(--line-height-130);
+  color: var(--color-neutral-white);
+  background: transparent;
+  border: 1px solid var(--color-key-200);
+  border-radius: var(--border-radius-32);
+  cursor: pointer;
+}
+
+.chip:hover {
+  background: var(--color-key-1000);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* 支援制度を探す（AI インタビュー）への入口 */
+.support-cta {
+  margin-top: 40px;
+  padding-top: 32px;
+  border-top: 1px solid var(--color-key-600);
+}
+
+.support-button {
+  min-height: 48px;
+  padding: 0 24px;
+  font: inherit;
+  font-size: var(--font-size-18);
+  font-weight: var(--font-weight-700);
+  color: var(--color-key-1100);
+  background: var(--color-neutral-white);
+  border: 4px double transparent;
+  border-radius: var(--border-radius-8);
+  cursor: pointer;
+}
+
+.support-button:hover {
+  background: var(--key-tint);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.support-cta p {
+  max-width: 32em;
+  margin: 12px auto 0;
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-150);
+  color: var(--color-key-100);
+}
+
+/* テーマから探す */
+.topics {
+  flex: 1;
+  padding: 56px 0 72px;
+  background: var(--bg-subtle);
+}
+
+.topics h2 {
+  margin: 0 0 24px;
+  /* Std-28B-150 */
+  font-size: var(--font-size-28);
+  font-weight: var(--font-weight-700);
+  line-height: var(--line-height-150);
+  color: var(--color-neutral-solid-gray-900);
+}
+
+.topic-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.topic {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  height: 100%;
+  padding: 20px 48px 20px 20px;
+  font: inherit;
+  text-align: left;
+  color: var(--text-body);
+  background: var(--bg-base);
+  border: 1px solid var(--color-neutral-solid-gray-200);
+  border-radius: var(--border-radius-12);
+  cursor: pointer;
+}
+
+.topic:hover {
+  border-color: var(--key);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.topic:hover .topic-title {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.topic-title {
+  /* Std-18B-160 */
+  font-size: var(--font-size-18);
+  font-weight: var(--font-weight-700);
+  line-height: var(--line-height-160);
+  color: var(--color-key-1000);
+}
+
+.topic-desc {
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-150);
+  color: var(--text-description);
+}
+
+.topic-arrow {
+  position: absolute;
+  right: 20px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: var(--font-size-20);
+  color: var(--key);
+}
+
+.footer {
+  padding: 32px 0;
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-170);
+  color: var(--color-neutral-solid-gray-50);
+  background: var(--color-neutral-solid-gray-900);
+}
+
+.footer a {
+  color: var(--color-neutral-white);
+  text-underline-offset: 3px;
+}
+
+/* トップ → チャットの切り替え */
+.container {
+  animation: fade-up 0.3s ease-out;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (max-width: 560px) {
+  .ask {
+    flex-direction: column;
+  }
+
+  .ask-button {
+    width: 100%;
+  }
+
+  .brand-name small {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hello-word,
+  .container {
+    animation: none;
+  }
+}
+
 /* 音声入力ボタン（DADS セカンダリボタン相当・48px 四方） */
-.composer button.mic {
+button.mic {
   flex: none;
   display: flex;
   align-items: center;
@@ -488,17 +792,17 @@ a.header-title:hover {
   cursor: pointer;
 }
 
-.composer button.mic:hover:not(:disabled) {
+button.mic:hover:not(:disabled) {
   background: var(--key-tint);
 }
 
-.composer button.mic:disabled {
+button.mic:disabled {
   color: var(--color-neutral-solid-gray-300);
   border-color: var(--color-neutral-solid-gray-300);
   cursor: not-allowed;
 }
 
-.composer button.mic.listening {
+button.mic.listening {
   background: var(--error);
   border-color: var(--error);
   color: var(--color-neutral-white);
@@ -512,7 +816,7 @@ a.header-title:hover {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .composer button.mic.listening {
+  button.mic.listening {
     animation: none;
   }
 }
@@ -581,4 +885,15 @@ a.header-title:hover {
 
 .doc li {
   margin-bottom: 8px;
+}
+
+.ask button.mic {
+  align-self: center;
+}
+
+/* ヒーロー（濃い背景）上のエラー表示 */
+.ask-voice-error {
+  margin: 12px auto 0;
+  color: var(--color-neutral-white);
+  font-weight: var(--font-weight-700);
 }

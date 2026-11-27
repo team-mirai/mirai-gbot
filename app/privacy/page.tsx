@@ -11,8 +11,22 @@ export default function PrivacyPage() {
     <main className="container">
       <header className="header">
         <div className="header-inner">
-          <Link href="/" className="header-title">
-            mirai-gbot
+          <Link href="/" className="brand" aria-label="mirai-gbot トップに戻る">
+            <svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">
+              <circle cx="16" cy="16" r="16" fill="currentColor" />
+              <path
+                d="M21.66 10.34A8 8 0 1 0 24 16H17"
+                fill="none"
+                stroke="#ffffff"
+                strokeWidth="3.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span className="brand-name">
+              mirai-gbot
+              <small>行政相談 AI アシスタント</small>
+            </span>
           </Link>
         </div>
       </header>
