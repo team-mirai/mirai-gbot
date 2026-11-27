@@ -1,0 +1,13 @@
+{
+  "name": "baseline",
+  "description": "最初のやり方: Sonnet 5.5 + 検索なし + シンプルなプロンプト",
+  "questions": "questions/gov_basic.jsonl",
+  "target": {
+    "type": "openrouter",
+    "model": "anthropic/claude-sonnet-5.5",
+    "system_prompt_file": "prompts/v1_simple.md",
+    "max_tokens": 2000,
+    "search": { "type": "none" }
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}

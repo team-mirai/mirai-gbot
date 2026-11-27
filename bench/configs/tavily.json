@@ -1,0 +1,13 @@
+{
+  "name": "tavily",
+  "description": "Tavily で検索して結果をプロンプトに埋め込む (要 TAVILY_API_KEY)",
+  "questions": "questions/gov_basic.jsonl",
+  "target": {
+    "type": "openrouter",
+    "model": "anthropic/claude-sonnet-5.5",
+    "system_prompt_file": "prompts/v2_grounded.md",
+    "max_tokens": 2000,
+    "search": { "type": "tavily", "max_results": 5, "include_domains": ["go.jp", "lg.jp"] }
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}

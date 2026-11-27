@@ -1,0 +1,13 @@
+{
+  "name": "web-exa",
+  "description": "OpenRouter web プラグイン (Exa 検索) + 出典重視プロンプト",
+  "questions": "questions/gov_basic.jsonl",
+  "target": {
+    "type": "openrouter",
+    "model": "anthropic/claude-sonnet-5.5",
+    "system_prompt_file": "prompts/v2_grounded.md",
+    "max_tokens": 2000,
+    "search": { "type": "openrouter_web", "engine": "exa", "max_results": 5 }
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}
