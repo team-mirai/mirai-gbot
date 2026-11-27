@@ -5,11 +5,34 @@ import { Markdown } from "./Markdown";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 
+// 入力欄のプレースホルダーに順番に表示する質問の例。
+// どんなことを聞けばよいかの手がかりになるよう、身近な行政手続きを選んでいる。
+const EXAMPLE_QUESTIONS = [
+  "引っ越したときに必要な手続きは？",
+  "児童手当の申請方法を教えて",
+  "マイナンバーカードの作り方は？",
+  "パスポートの更新に必要なものは？",
+  "確定申告が必要なのはどんな人？",
+  "国民健康保険の保険料を減らせる？",
+];
+const PLACEHOLDER_INTERVAL_MS = 4000;
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [exampleIndex, setExampleIndex] = useState(0);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 入力が空のあいだだけ、質問例を一定間隔で切り替える
+  useEffect(() => {
+    if (input || loading) return;
+    const id = setInterval(
+      () => setExampleIndex((i) => (i + 1) % EXAMPLE_QUESTIONS.length),
+      PLACEHOLDER_INTERVAL_MS,
+    );
+    return () => clearInterval(id);
+  }, [input, loading]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -109,7 +132,7 @@ export default function Home() {
             className="text-field"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="メッセージを入力"
+            placeholder={`例：${EXAMPLE_QUESTIONS[exampleIndex]}`}
             disabled={loading}
             autoComplete="off"
             maxLength={2000}
