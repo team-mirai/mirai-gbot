@@ -6,6 +6,12 @@ import { useSpeechRecognition } from "./useSpeechRecognition";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 
+const EXAMPLE_QUESTIONS = [
+  "住民票の取り方を教えてください",
+  "マイナンバーカードをなくしたときはどうすればいいですか？",
+  "引っ越しのときに必要な手続きを教えてください",
+];
+
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -30,9 +36,13 @@ export default function Home() {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  async function handleSubmit(e: FormEvent) {
+  function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    const text = input.trim();
+    send(input);
+  }
+
+  async function send(rawText: string) {
+    const text = rawText.trim();
     if (!text || loading) return;
     speech.cancel();
 
@@ -80,18 +90,35 @@ export default function Home() {
       <header className="header">
         <div className="header-inner">
           <h1 className="header-title">mirai-gbot</h1>
-          <p className="header-description">AI チャットボット</p>
+          <p className="header-description">
+            行政手続きや公的制度についての疑問に答える、行政相談用のチャットボットです。
+          </p>
         </div>
       </header>
 
       <section className="messages" aria-label="会話">
         <div className="messages-inner" aria-live="polite">
           {messages.length === 0 && (
-            <p className="empty">
-              行政手続きや公的制度について聞いてください。
-              <br />
-              マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
-            </p>
+            <div className="empty">
+              <p>行政手続きや公的制度について、お気軽にご相談ください。</p>
+              <p>
+                マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
+              </p>
+              <p className="empty-sub">例えば、こんな質問ができます。</p>
+              <div className="examples">
+                {EXAMPLE_QUESTIONS.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    className="example"
+                    onClick={() => send(q)}
+                    disabled={loading}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            </div>
           )}
           {messages.map((m, i) => (
             <div

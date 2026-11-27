@@ -143,6 +143,50 @@ body {
   color: var(--text-description);
 }
 
+.empty p {
+  margin: 0 0 8px;
+}
+
+.empty .empty-sub {
+  margin-top: 16px;
+  font-size: var(--font-size-14);
+}
+
+.examples {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 質問例ボタン（DADS セカンダリボタン相当） */
+.example {
+  max-width: 100%;
+  min-height: 44px;
+  padding: 8px 16px;
+  font: inherit;
+  font-size: var(--font-size-16);
+  line-height: var(--line-height-150);
+  text-align: left;
+  color: var(--key);
+  background: var(--bg-base);
+  border: 1px solid var(--key);
+  border-radius: var(--border-radius-8);
+  cursor: pointer;
+}
+
+.example:hover:not(:disabled) {
+  background: var(--key-tint);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.example:disabled {
+  color: var(--color-neutral-solid-gray-300);
+  border-color: var(--color-neutral-solid-gray-300);
+  cursor: not-allowed;
+}
+
 .bubble {
   padding: 12px 16px;
   border-radius: var(--border-radius-12);
