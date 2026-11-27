@@ -26,6 +26,7 @@ http://localhost:3000 を開きます。
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
+- 振り仮名: 画面右上のスイッチで、漢字に振り仮名（HTML の `<ruby>` 要素）を付けて表示できます。読みは `app/api/furigana/route.ts` が形態素解析ライブラリ [kuromoji](https://github.com/takuyaa/kuromoji.js) で求めます（外部 API は使いません）
 - Web 検索: OpenRouter のモデル名に `:online` を付けて呼び出し、最新情報を検索した上で回答します。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
 
 ## 自動開発（Claude Software Factory）

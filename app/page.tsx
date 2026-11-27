@@ -2,6 +2,9 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { FuriganaContext, FuriganaText } from "./Furigana";
+
+const FURIGANA_KEY = "mirai-gbot:furigana";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 
@@ -9,7 +12,23 @@ export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [furigana, setFurigana] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 振り仮名の設定はブラウザごとに記憶する（読めない環境でも動作には影響しない）
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FURIGANA_KEY) === "on") setFurigana(true);
+    } catch {}
+  }, []);
+
+  function toggleFurigana() {
+    const next = !furigana;
+    setFurigana(next);
+    try {
+      localStorage.setItem(FURIGANA_KEY, next ? "on" : "off");
+    } catch {}
+  }
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -59,18 +78,46 @@ export default function Home() {
   }
 
   return (
-    <main className="container">
+    <FuriganaContext.Provider value={furigana}>
+    <main className={`container${furigana ? " furigana-on" : ""}`}>
       <header className="header">
         <div className="header-inner">
           <h1 className="header-title">mirai-gbot</h1>
-          <p className="header-description">AI チャットボット</p>
+          <p className="header-description">
+            <FuriganaText text="AI チャットボット" />
+          </p>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={furigana}
+            className="furigana-toggle"
+            onClick={toggleFurigana}
+          >
+            <span className="furigana-toggle-label">
+              <ruby>
+                振<rp>(</rp><rt>ふ</rt><rp>)</rp>
+              </ruby>
+              り
+              <ruby>
+                仮名<rp>(</rp><rt>がな</rt><rp>)</rp>
+              </ruby>
+            </span>
+            <span className="furigana-toggle-track" aria-hidden="true">
+              <span className="furigana-toggle-thumb" />
+            </span>
+            <span className="furigana-toggle-state" aria-hidden="true">
+              {furigana ? "オン" : "オフ"}
+            </span>
+          </button>
         </div>
       </header>
 
       <section className="messages" aria-label="会話">
         <div className="messages-inner" aria-live="polite">
           {messages.length === 0 && (
-            <p className="empty">何でも聞いてください。</p>
+            <p className="empty">
+              <FuriganaText text="何でも聞いてください。" />
+            </p>
           )}
           {messages.map((m, i) => (
             <div
@@ -80,14 +127,22 @@ export default function Home() {
               <span className="message-label">
                 {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
               </span>
-              <div className="bubble" role={m.error ? "alert" : undefined}>
-                {m.role === "assistant" && m.content && !m.error ? (
-                  <Markdown text={m.content} />
-                ) : (
-                  m.content ||
-                  (loading ? <span className="typing">回答を作成中…</span> : "")
-                )}
-              </div>
+              {/* 生成中のメッセージは文字列が変わり続けるため、完了してから振り仮名を付ける */}
+              <FuriganaContext.Provider
+                value={furigana && !(loading && i === messages.length - 1)}
+              >
+                <div className="bubble" role={m.error ? "alert" : undefined}>
+                  {m.role === "assistant" && m.content && !m.error ? (
+                    <Markdown text={m.content} />
+                  ) : m.content ? (
+                    <FuriganaText text={m.content} />
+                  ) : loading ? (
+                    <span className="typing">回答を作成中…</span>
+                  ) : (
+                    ""
+                  )}
+                </div>
+              </FuriganaContext.Provider>
             </div>
           ))}
           <div ref={bottomRef} />
@@ -119,5 +174,6 @@ export default function Home() {
         </div>
       </form>
     </main>
+    </FuriganaContext.Provider>
   );
 }
