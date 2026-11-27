@@ -14,7 +14,7 @@ const notoSansJp = Noto_Sans_JP({
 
 export const metadata: Metadata = {
   title: "mirai-gbot",
-  description: "シンプルなチャットボット",
+  description: "行政手続きや公的制度について相談できる行政相談用チャットボット",
 };
 
 export default function RootLayout({
