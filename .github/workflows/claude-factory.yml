@@ -42,6 +42,20 @@ jobs:
       # 同じ github-actions[bot] では自分の PR を承認できないため。
       GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
     steps:
+      # ラベルを付けた人が Write 以上の権限を持つ場合だけ動かす
+      # （Triage 権限だけのメンバーが自動マージまで起動できないようにする）
+      - name: 起動者の権限を確認
+        env:
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          set -euo pipefail
+          PERM="$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$SENDER/permission" -q .permission || echo none)"
+          echo "sender=$SENDER permission=$PERM"
+          case "$PERM" in
+            admin|maintain|write) ;;
+            *) echo "::error::$SENDER には Write 以上の権限がないため実行しません"; exit 1 ;;
+          esac
+
       - name: ラベル準備 & 着手コメント
         run: |
           gh label create claude-working --color FBCA04 --description "Claude が作業中" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
@@ -49,14 +63,14 @@ jobs:
           gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --add-label claude-working
           gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body "🤖 Claude が実装を開始しました: $RUN_URL"
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
           # Claude 自身には push させない（コミット/プッシュは後続のステップで行う）
           persist-credentials: false
 
       - name: Claude が実装
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1
         env:
           # OpenRouter 経由で Claude を呼ぶ（/api まで。/api/v1 にすると 404 になる）
           ANTHROPIC_BASE_URL: https://openrouter.ai/api
@@ -115,11 +129,18 @@ jobs:
             exit 0
           fi
 
-          # .github/workflows の変更は弾く（ワークフロー改ざん防止）
-          if git status --porcelain | grep -q '\.github/workflows/'; then
-            git checkout -- .github/workflows/ 2>/dev/null || true
-            git clean -fd .github/workflows/ 2>/dev/null || true
+          # .github/ 配下（ワークフロー・CODEOWNERS 等）の変更は弾く（改ざん防止）
+          if git status --porcelain | grep -q '\.github/'; then
+            git checkout -- .github/ 2>/dev/null || true
+            git clean -fd .github/ 2>/dev/null || true
           fi
+          # レビュー判定ファイルを PR に紛れ込ませて自動承認させる手口を防ぐ
+          rm -f REVIEW_RESULT.md
+          # 秘密情報らしきファイルはコミットしない
+          git status --porcelain --untracked-files=all | awk '{print $NF}' \
+            | { grep -E '(^|/)(\.env($|\.)|.*\.pem$|.*\.key$|id_rsa)' || true; } \
+            | { grep -v '\.env\.example$' || true; } \
+            | xargs -r rm -f
 
           git config user.name "claude-factory[bot]"
           git config user.email "claude-factory[bot]@users.noreply.github.com"
@@ -168,14 +189,23 @@ jobs:
       BRANCH: claude/issue-${{ github.event.issue.number }}
       BASE_BRANCH: ${{ github.event.repository.default_branch }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           ref: claude/issue-${{ github.event.issue.number }}
           fetch-depth: 0
           persist-credentials: false
 
+      # ブランチに REVIEW_RESULT.md が含まれていても判定に使わない
+      - name: レビュー判定ファイルを初期化
+        run: |
+          set -euo pipefail
+          if git ls-files --error-unmatch REVIEW_RESULT.md >/dev/null 2>&1; then
+            echo "::error::PR に REVIEW_RESULT.md が含まれているためマージしません"; exit 1
+          fi
+          rm -f REVIEW_RESULT.md
+
       - name: Claude がレビュー
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@4411a9e9b0283becf4b924f7bce360fd7756c78c # v1
         env:
           # OpenRouter 経由で Claude を呼ぶ（/api まで。/api/v1 にすると 404 になる）
           ANTHROPIC_BASE_URL: https://openrouter.ai/api
