@@ -23,7 +23,7 @@ http://localhost:3000 を開きます。
 
 ## 構成
 
-- `app/page.tsx` — チャット画面（クライアントコンポーネント）
+- `app/page.tsx` — チャット画面（クライアントコンポーネント）。画面上部で文字サイズ（標準・大・特大）と「やさしい日本語」モードを切り替えられます（設定はブラウザに保存）
 - `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による日本語の音声入力。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
 - `app/privacy/page.tsx` — 利用上の注意とプライバシー（入力内容の扱い・個人情報入力の注意・免責）の説明ページ。チャット画面のヘッダーと入力欄下の注意書きからリンク
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却

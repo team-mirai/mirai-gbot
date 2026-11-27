@@ -126,8 +126,21 @@ function supportPrompt() {
   ];
 }
 
-function systemPrompt(mode: Mode) {
-  return (mode === "support" ? supportPrompt() : chatPrompt())
+// 「やさしい日本語」モード: 高齢の方や日本語に不慣れな方にも読みやすい表現で答える
+const EASY_JAPANESE_PROMPT = [
+  "【やさしい日本語モード】ユーザーは「やさしい日本語」での回答を希望しています。日本語で答える場合は次を守ってください。",
+  "- 1 文を短くする（目安 30 字以内）。1 つの文で 1 つのことだけを言う。",
+  "- 難しい言葉・漢語・カタカナ語はできるだけ使わず、ふだんの言葉に言いかえる。",
+  "- 制度名や手続き名など、言いかえられない専門用語は、そのあとにかっこ書きでやさしい説明を付ける（例: 住民票（住んでいる場所を証明する書類））。",
+  "- 二重否定、あいまいな言い方、敬語の重ねすぎ（「〜させていただきます」など）は避け、「です・ます」でていねいに書く。",
+  "- 日付・時間・金額・電話番号などの数字は省略せずにはっきり書く。",
+].join("\n");
+
+function systemPrompt(mode: Mode, easyJapanese = false) {
+  return [
+    ...(mode === "support" ? supportPrompt() : chatPrompt()),
+    easyJapanese ? EASY_JAPANESE_PROMPT : "",
+  ]
     .filter(Boolean)
     .join("\n");
 }
@@ -192,6 +205,7 @@ export async function POST(req: Request) {
   const messages: ChatMessage[] = parsed.messages;
   const mode: Mode =
     (raw as { mode?: unknown }).mode === "support" ? "support" : "chat";
+  const easyJapanese = (raw as { easyJapanese?: unknown }).easyJapanese === true;
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -209,7 +223,7 @@ export async function POST(req: Request) {
       reasoning: { effort: "low" },
       // 行政相談は個人情報を含みうるため、入力を学習・保存に使うプロバイダーへはルーティングしない
       provider: { data_collection: "deny" },
-      messages: [{ role: "system", content: systemPrompt(mode) }, ...messages],
+      messages: [{ role: "system", content: systemPrompt(mode, easyJapanese) }, ...messages],
       ...(WEB_SEARCH
         ? { plugins: [{ id: "web", include_domains: INCLUDE_DOMAINS }] }
         : {}),
