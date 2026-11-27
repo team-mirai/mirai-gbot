@@ -13,6 +13,30 @@ const SUPPORT_START = "使える支援制度を探したいです。";
 // 最下部からこの距離（px）以内にいれば「最下部にいる」とみなして自動スクロールを続ける
 const STICK_THRESHOLD = 48;
 
+// 文字サイズ（html 要素の data-font-size 属性で切り替え。DADS の文字サイズは rem 指定なので追従する）
+const FONT_SIZES = [
+  { value: "normal", label: "標準" },
+  { value: "large", label: "大" },
+  { value: "xlarge", label: "特大" },
+] as const;
+type FontSize = (typeof FONT_SIZES)[number]["value"];
+
+// 設定はブラウザに保存する（layout.tsx の初期化スクリプトと同じキー）
+const FONT_SIZE_KEY = "mirai-gbot:font-size";
+const EASY_JAPANESE_KEY = "mirai-gbot:easy-japanese";
+
+function isFontSize(v: string | null): v is FontSize {
+  return FONT_SIZES.some((f) => f.value === v);
+}
+
+function save(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // プライベートモード等で保存できなくても動作は続ける
+  }
+}
+
 const GREETINGS: [string, string][] = [
   ["こんにちは", "。"],
   ["Hello", "."],
@@ -50,6 +74,8 @@ export default function Home() {
   // 最下部付近にいる間だけ新しい内容に合わせて自動スクロールする
   const stickToBottomRef = useRef(true);
   const [showJump, setShowJump] = useState(false);
+  const [fontSize, setFontSize] = useState<FontSize>("normal");
+  const [easyJapanese, setEasyJapanese] = useState(false);
   const inChat = messages.length > 0;
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
@@ -64,6 +90,28 @@ export default function Home() {
       voiceBaseRef.current = input;
       speech.start();
     }
+  }
+
+  // 保存済みの設定を復元（SSR とのずれを避けるためマウント後に読む）
+  useEffect(() => {
+    try {
+      const f = localStorage.getItem(FONT_SIZE_KEY);
+      if (isFontSize(f)) setFontSize(f);
+      setEasyJapanese(localStorage.getItem(EASY_JAPANESE_KEY) === "true");
+    } catch {
+      // 読めなければ既定値のまま
+    }
+  }, []);
+
+  function changeFontSize(value: FontSize) {
+    setFontSize(value);
+    document.documentElement.dataset.fontSize = value;
+    save(FONT_SIZE_KEY, value);
+  }
+
+  function changeEasyJapanese(value: boolean) {
+    setEasyJapanese(value);
+    save(EASY_JAPANESE_KEY, String(value));
   }
 
   function scrollToBottom() {
@@ -122,6 +170,7 @@ export default function Home() {
         body: JSON.stringify({
           messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
           mode: currentMode,
+          easyJapanese,
         }),
       });
 
@@ -182,6 +231,36 @@ export default function Home() {
     </button>
   );
 
+  // 表示設定（文字サイズ・やさしい日本語）。トップとチャット画面のヘッダー下に出す
+  const settings = (
+    <div className="settings">
+      <div className="font-size" role="group" aria-label="文字サイズ">
+        <span className="settings-label" aria-hidden="true">
+          文字サイズ
+        </span>
+        {FONT_SIZES.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            className="toggle"
+            aria-pressed={fontSize === f.value}
+            onClick={() => changeFontSize(f.value)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <label className="easy-japanese">
+        <input
+          type="checkbox"
+          checked={easyJapanese}
+          onChange={(e) => changeEasyJapanese(e.target.checked)}
+        />
+        やさしい日本語
+      </label>
+    </div>
+  );
+
   if (!inChat) {
     return (
       <div className="landing">
@@ -191,6 +270,7 @@ export default function Home() {
 
         <header className="header">
           <div className="header-inner">{brand}</div>
+          {settings}
         </header>
 
         <main>
@@ -315,6 +395,7 @@ export default function Home() {
             新しい相談
           </button>
         </div>
+        {settings}
       </header>
 
       <div className="messages-wrap">
