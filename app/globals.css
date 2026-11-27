@@ -127,8 +127,11 @@ body {
   color: var(--text-description);
 }
 
+/* 文字サイズ「特大」の狭い画面でもはみ出さないよう折り返す */
 .chat-header {
+  flex-wrap: wrap;
   align-items: center;
+  row-gap: 8px;
 }
 
 .chat-header .button-secondary {
