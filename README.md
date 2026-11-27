@@ -27,6 +27,7 @@ http://localhost:3000 を開きます。
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `anthropic/claude-opus-5.5`。環境変数 `OPENROUTER_MODEL` で変更できます
 - Web 検索: OpenRouter のモデル名に `:online` を付けて呼び出し、最新情報を検索した上で回答します。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
+- 情報源の信頼性: 公的機関（`go.jp` / `lg.jp` / 自治体ドメイン）のページを優先して根拠・出典にするようシステムプロンプトで指示し、出典リストも公的機関を先頭に並べます。公的機関の出典が 1 件もない場合は注意書きを付けます。年度が関わる内容は情報の時点を明示し、回答末尾で最終確認を担当窓口へ案内します
 
 ## 自動開発（Claude Software Factory）
 

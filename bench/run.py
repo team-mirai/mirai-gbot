@@ -72,7 +72,8 @@ def summarize(rows: list, cfg: dict, meta: dict) -> dict:
                 "mean_score": round(sum(r["judge"]["score"] for r in rs) / m, 2),
                 "error_rate": round(sum(r["judge"]["has_error"] for r in rs) / m, 4),
                 "mean_coverage": round(sum(r["judge"]["coverage"] for r in rs) / m, 3),
-                "grounded_rate": round(sum(r["judge"]["grounded"] >= 1 for r in rs) / m, 4)}
+                "grounded_rate": round(sum(r["judge"]["grounded"] >= 1 for r in rs) / m, 4),
+                "official_source_rate": round(sum(r["judge"]["grounded"] >= 2 for r in rs) / m, 4)}
     by_cat = defaultdict(list)
     for r in ok:
         by_cat[r.get("category", "other")].append(r)
@@ -97,7 +98,8 @@ def to_markdown(s: dict) -> str:
              f"- questions: {s['questions_file']} × repeat {s['repeat']}  /  git: {s['git']}", ""]
     if o.get("n"):
         lines += [f"**正答率 {o['pass_rate']*100:.1f}%** (95%CI {o['pass_rate_ci95'][0]*100:.0f}–{o['pass_rate_ci95'][1]*100:.0f}%)"
-                  f" / 平均スコア {o['mean_score']} / 誤り率 {o['error_rate']*100:.1f}% / 出典あり {o['grounded_rate']*100:.0f}%", "",
+                  f" / 平均スコア {o['mean_score']} / 誤り率 {o['error_rate']*100:.1f}% / 出典あり {o['grounded_rate']*100:.0f}%"
+                  f" / 公的出典 {o.get('official_source_rate', 0)*100:.0f}%", "",
                   f"レイテンシ mean {s['latency_s']['mean']}s p90 {s['latency_s']['p90']}s / "
                   f"コスト 回答 ${s['cost_usd']['answer']} + 採点 ${s['cost_usd']['judge']} / 失敗リクエスト {s['failed_requests']}", "",
                   "| カテゴリ | n | 正答率 | 平均スコア | 誤り率 |", "|---|---:|---:|---:|---:|"]

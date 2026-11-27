@@ -26,6 +26,7 @@ python3 bench/compare.py bench/results/<A> bench/results/<B>   # A→B で問題
 | モデルを変える | `run.py --config configs/baseline.json --set target.model=openai/gpt-5.5 --name gpt55` |
 | 検索ツールを変える | `--set target.search.engine=native` / `--set target.search.type=none` |
 | プロンプトを変える | `--set target.system_prompt_file=prompts/v2_grounded.md` |
+| 公的機関優先・年度明示プロンプト (v3) | `run.py --config configs/web_official.json` (プロンプト中の `{{today}}` は実行日に置換) |
 | 動作確認だけ | `--limit 3` / `--ids proc-001,sw-001` / `--category 最新制度` |
 | ばらつきを見る | `--repeat 3` (同じ質問を 3 回ずつ) |
 | 本体アプリを測る | `configs/app_local.json` (API の形に合わせて `body_template` / `answer_path` を編集) |
@@ -56,7 +57,7 @@ judge (既定: `anthropic/claude-opus-5.5`, temperature 0) が問題ごとに以
 | correctness | 0=誤り/有害, 1=部分的, 2=正しい |
 | coverage | 必須ポイント (`key_points`) を押さえた割合 |
 | has_error | 誤りや NG 内容 (`must_not`) を含むか |
-| grounded | 0=出典なし, 1=出典名や非公式 URL, 2=公的機関の URL |
+| grounded | 0=出典なし, 1=出典名や非公式 URL, 2=公的機関の URL (summary の `official_source_rate` / 「公的出典」は grounded=2 の割合) |
 | **pass (正答)** | correctness=2 かつ 誤りなし かつ coverage≥50% |
 | score (0-100) | 60×正確さ + 30×網羅性 + 10×出典。誤りがあれば最大 30 |
 

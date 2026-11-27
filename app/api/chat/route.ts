@@ -32,6 +32,12 @@ function systemPrompt() {
     WEB_SEARCH
       ? "Web 検索結果が与えられた場合、最新の事実や数値はそれを根拠に答えてください。出典は本文中に [サイト名](URL) の形で 1〜2 個だけ添え、URL をそのまま貼らないでください。検索結果で確認できないことは推測と明示してください。"
       : "",
+    // 情報源の信頼性（Issue #17）
+    WEB_SEARCH
+      ? "情報源は公的機関（省庁・自治体などの go.jp / lg.jp ドメイン、e-Gov 法令検索、裁判所など）のページを最優先で根拠・出典にしてください。民間サイト・まとめ記事・個人ブログは、公的機関の情報で裏付けられない限り根拠にしないでください。公的機関の情報源が見つからなかった場合は、「公的機関の情報で確認できませんでした」と明示してください。"
+      : "",
+    `年度・税制改正・制度改正・金額・期限など時点によって変わる内容は、今日の日付（${today}）を基準に最新の年度の情報を優先し、「令和〇年度時点」「〇年〇月時点」のように情報の時点を明示してください。検索結果が古い年度の情報しかない場合や、改正があった可能性がある場合は、その旨を一言注意書きしてください。`,
+    "制度・手続き・金額・期限などについて答えたときは、回答の最後に「※最終的な確認はお住まいの自治体や担当窓口でお願いします。」と1行添えてください（挨拶やスコープ外の返答には不要です）。",
   ]
     .filter(Boolean)
     .join("\n");
@@ -48,6 +54,37 @@ function linkLabel(c: Citation): string {
   } catch {
     return c.url;
   }
+}
+
+// 公的機関のドメインか（省庁・e-Gov などの go.jp、自治体の lg.jp、
+// lg.jp 以外の自治体ドメイン例: city.chiba.jp / pref.xxx.jp）
+const OFFICIAL_HOSTS = [
+  /(^|\.)(go|lg)\.jp$/,
+  /(^|\.)(pref|city|town|vill)\.[a-z0-9-]+(\.[a-z0-9-]+)?\.jp$/,
+];
+function isOfficialSource(url: string): boolean {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return OFFICIAL_HOSTS.some((re) => re.test(host));
+  } catch {
+    return false;
+  }
+}
+
+// 出典の末尾表示: 公的機関を先頭に並べ、公的機関が 1 件もなければ注意書きを付ける
+function formatCitations(citations: Citation[]): string {
+  if (citations.length === 0) return "";
+  const official = citations.filter((c) => isOfficialSource(c.url));
+  const others = citations.filter((c) => !isOfficialSource(c.url));
+  const list = [...official, ...others]
+    .slice(0, 3)
+    .map((c) => `[${linkLabel(c)}](${c.url})`)
+    .join(" · ");
+  const note =
+    official.length === 0
+      ? "\n\n※公的機関（省庁・自治体など）の情報源は見つかりませんでした。内容は公式サイトや担当窓口でご確認ください。"
+      : "";
+  return `\n\n出典: ${list}${note}`;
 }
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -160,14 +197,9 @@ export async function POST(req: Request) {
           }
         }
 
-        // 検索で参照したページを末尾に出典としてコンパクトに付ける
-        if (citations.size > 0) {
-          const list = [...citations.values()]
-            .slice(0, 3)
-            .map((c) => `[${linkLabel(c)}](${c.url})`)
-            .join(" · ");
-          controller.enqueue(encoder.encode(`\n\n出典: ${list}`));
-        }
+        // 検索で参照したページを末尾に出典としてコンパクトに付ける（公的機関のページを優先）
+        const footer = formatCitations([...citations.values()]);
+        if (footer) controller.enqueue(encoder.encode(footer));
       } catch (err) {
         console.error(err);
         controller.enqueue(encoder.encode("\n\n[エラーが発生しました。]"));

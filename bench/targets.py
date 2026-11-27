@@ -13,6 +13,7 @@ search.type (openrouter target のときのみ):
 """
 from __future__ import annotations
 
+import datetime
 import os
 import time
 from typing import Callable, Dict, List
@@ -50,12 +51,17 @@ def _format_docs(docs: List[dict]) -> str:
 
 # ---------- target 実装 ----------
 
+def _today_jst() -> str:
+    d = datetime.datetime.now(datetime.timezone(datetime.timedelta(hours=9)))
+    return f"{d.year}年{d.month}月{d.day}日"
+
+
 def _load_prompt(cfg: dict) -> str:
-    if cfg.get("system_prompt"):
-        return cfg["system_prompt"]
-    if cfg.get("system_prompt_file"):
-        return (BENCH_DIR / cfg["system_prompt_file"]).read_text(encoding="utf-8")
-    return ""
+    """システムプロンプトを読む。"{{today}}" は今日の日付 (日本時間) に置換する。"""
+    text = cfg.get("system_prompt") or ""
+    if not text and cfg.get("system_prompt_file"):
+        text = (BENCH_DIR / cfg["system_prompt_file"]).read_text(encoding="utf-8")
+    return text.replace("{{today}}", _today_jst())
 
 
 def answer_openrouter(question: str, target: dict) -> dict:
