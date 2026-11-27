@@ -10,9 +10,11 @@ export default function PrivacyPage() {
   return (
     <main className="container">
       <header className="header">
-        <Link href="/" className="header-title">
-          mirai-gbot
-        </Link>
+        <div className="header-inner">
+          <Link href="/" className="header-title">
+            mirai-gbot
+          </Link>
+        </div>
       </header>
 
       <article className="doc">
