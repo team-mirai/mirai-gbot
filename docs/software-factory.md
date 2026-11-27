@@ -69,8 +69,12 @@ gh label create ready --color 0E8A16 --description "Claude に実装を任せる
 
 ## 安全面の注意
 
-- ラベルを付けられるのは Triage 以上の権限を持つメンバーだけなので、起動できる人は限定されます。ただし Issue 本文はそのまま Claude に渡るので、外部の人が書いた Issue に `ready` を付ける前に本文を確認してください（プロンプトインジェクション対策）。
+- ラベルを付けた人が **Write 以上の権限**を持つ場合だけ実行します（Triage 権限ではラベルを付けても動きません）。ただし Issue 本文はそのまま Claude に渡るので、外部の人が書いた Issue に `ready` を付ける前に本文を確認してください（プロンプトインジェクション対策）。
 - Claude には push 権限を渡していません（checkout は `persist-credentials: false`）。commit / push / PR 作成はワークフローのシェルステップが行います。
 - `.github/workflows/` への変更は自動で破棄されます。
 - コンフリクト自動解決では PR の説明文が Claude に渡ります。対象は同一リポジトリのブランチ（＝書き込み権限のあるメンバーが作ったもの）に限定し、fork からの PR は扱いません。
+- `.github/` 配下への変更、`.env*` / `*.pem` / `*.key` などの秘密情報らしきファイルは自動で破棄されます。
+- PR に `REVIEW_RESULT.md` が含まれている場合は自動レビュー結果として扱わず、マージしません（判定の偽装防止）。
+- 利用するアクション（`actions/checkout` / `anthropics/claude-code-action`）はコミット SHA で固定しています。更新するときは SHA を差し替えてください。
+- 自動レビューは同じ Claude によるもので、Issue 本文経由のプロンプトインジェクションを完全には防げません。`main` はそのまま本番デプロイされるので、ブランチ保護で必須 CI を設定し、外部の人が書いた Issue には `ready` を付けないでください。
 - 自動レビューで `REQUEST_CHANGES` になった場合や、エラー時は `needs-human` ラベルで人間に戻します。
