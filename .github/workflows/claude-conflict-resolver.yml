@@ -1,0 +1,479 @@
+# コンフリクト自動解決:
+#   main が進む / 定期実行 / 手動 / PR に `resolve-conflicts` ラベル
+#     → コンフリクトしている PR を探す (find)
+#     → PR ごとにベースブランチをマージし、Claude がコンフリクトを解決 (resolve)
+#       → ビルド確認 → 別の Claude が「解決部分だけ」をレビュー → OK なら push
+#
+# 必要な設定は docs/software-factory.md を参照。
+name: Claude Conflict Resolver
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    # GITHUB_TOKEN でマージされた場合は push イベントが飛ばないので、その保険
+    - cron: "17 * * * *"
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "対象の PR 番号（空なら全 PR をスキャン）"
+        required: false
+        default: ""
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+
+env:
+  # 1 回の実行で処理する PR の上限
+  MAX_PRS: "5"
+  # 同じブランチに対して自動解決する回数の上限（超えたら人間に戻す）
+  MAX_ATTEMPTS: "5"
+  RESOLVER_TRAILER: "Conflict-Resolved-By: claude-conflict-resolver"
+
+jobs:
+  find:
+    if: github.event_name != 'pull_request' || github.event.label.name == 'resolve-conflicts'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    outputs:
+      prs: ${{ steps.find.outputs.prs }}
+    env:
+      GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+      TARGET_PR: ${{ github.event.pull_request.number || inputs.pr_number }}
+    steps:
+      - name: ラベル準備
+        run: |
+          gh label create resolve-conflicts --color 5319E7 --description "Claude にコンフリクトを解決させる" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh label create needs-human --color D93F0B --description "人間の確認が必要" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+
+      - name: コンフリクトしている PR を探す
+        id: find
+        run: |
+          set -euo pipefail
+
+          if [ -n "$TARGET_PR" ]; then
+            # 明示指定（ラベル / 手動実行）は claude/ 以外のブランチや needs-human 付きも対象にする
+            candidates="$TARGET_PR"
+          else
+            # 自動スキャンの対象: 同一リポジトリのブランチで、claude/* か resolve-conflicts ラベル付き。
+            # needs-human が付いた PR は、人間が見るまで自動では触らない（無限リトライ防止）。
+            candidates="$(gh pr list -R "$GITHUB_REPOSITORY" --state open --limit 100 \
+              --json number,headRefName,isCrossRepository,labels \
+              -q '.[]
+                  | select(.isCrossRepository | not)
+                  | select(any(.labels[]; .name == "needs-human") | not)
+                  | select((.headRefName | startswith("claude/")) or any(.labels[]; .name == "resolve-conflicts"))
+                  | .number')"
+          fi
+
+          found=()
+          for n in $candidates; do
+            # mergeable は遅延計算されるので UNKNOWN の間は待って再取得する
+            mergeable=UNKNOWN
+            for _ in 1 2 3 4 5 6; do
+              info="$(gh pr view "$n" -R "$GITHUB_REPOSITORY" --json mergeable,isCrossRepository,state)"
+              mergeable="$(jq -r .mergeable <<<"$info")"
+              [ "$mergeable" != "UNKNOWN" ] && break
+              sleep 10
+            done
+            cross="$(jq -r .isCrossRepository <<<"$info")"
+            state="$(jq -r .state <<<"$info")"
+            echo "PR #$n: state=$state mergeable=$mergeable cross=$cross"
+
+            if [ "$state" != "OPEN" ] || [ "$cross" = "true" ]; then
+              continue
+            fi
+            if [ "$mergeable" = "CONFLICTING" ]; then
+              found+=("$n")
+            elif [ -n "$TARGET_PR" ]; then
+              gh pr comment "$n" -R "$GITHUB_REPOSITORY" \
+                --body "🤖 コンフリクト自動解決: 現在コンフリクトは検出されませんでした（mergeable=$mergeable）。" || true
+              gh pr edit "$n" -R "$GITHUB_REPOSITORY" --remove-label resolve-conflicts 2>/dev/null || true
+            fi
+          done
+
+          prs="$(jq -cn --argjson max "$MAX_PRS" '$ARGS.positional | map(tonumber) | .[:$max]' --args "${found[@]}")"
+          echo "対象: $prs"
+          echo "prs=$prs" >> "$GITHUB_OUTPUT"
+
+  resolve:
+    needs: find
+    if: needs.find.outputs.prs != '' && needs.find.outputs.prs != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        pr: ${{ fromJSON(needs.find.outputs.prs) }}
+    # 同じ PR に対する解決は 1 本ずつ
+    concurrency:
+      group: claude-conflict-resolver-pr-${{ matrix.pr }}
+      cancel-in-progress: false
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    env:
+      PR_NUMBER: ${{ matrix.pr }}
+      GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+      PUSH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      WORK: .claude-conflict
+    steps:
+      - name: PR 情報を取得
+        id: info
+        run: |
+          set -euo pipefail
+          gh pr view "$PR_NUMBER" -R "$GITHUB_REPOSITORY" \
+            --json headRefName,baseRefName,title,body,autoMergeRequest,isCrossRepository > "$RUNNER_TEMP/pr.json"
+          if [ "$(jq -r .isCrossRepository "$RUNNER_TEMP/pr.json")" = "true" ]; then
+            echo "fork からの PR は対象外です"; exit 1
+          fi
+          echo "head=$(jq -r .headRefName "$RUNNER_TEMP/pr.json")" >> "$GITHUB_OUTPUT"
+          echo "base=$(jq -r .baseRefName "$RUNNER_TEMP/pr.json")" >> "$GITHUB_OUTPUT"
+          echo "auto_merge=$(jq -r 'if .autoMergeRequest then "true" else "false" end' "$RUNNER_TEMP/pr.json")" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.info.outputs.head }}
+          fetch-depth: 0
+          # Claude 自身には push させない（push は後続のシェルステップで行う）
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: ベースブランチをマージ
+        id: merge
+        env:
+          HEAD_REF: ${{ steps.info.outputs.head }}
+          BASE_REF: ${{ steps.info.outputs.base }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$WORK"
+          # 作業用ファイルは git の管理外にする（git add -A で拾わない）
+          echo "/$WORK/" >> .git/info/exclude
+
+          # 試行回数の上限チェック
+          attempts="$(git log --oneline --grep="$RESOLVER_TRAILER" "origin/$BASE_REF..HEAD" | wc -l | tr -d ' ')"
+          if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+            echo "このブランチは既に $attempts 回自動解決しています（上限 $MAX_ATTEMPTS 回）。" > "$WORK/FAILURE.md"
+            exit 1
+          fi
+
+          git config user.name "claude-factory[bot]"
+          git config user.email "claude-factory[bot]@users.noreply.github.com"
+
+          if git merge --no-ff --no-commit "origin/$BASE_REF"; then
+            # GitHub 側の mergeable が古かっただけ（他の実行が既に解決済みなど）
+            git merge --abort || true
+            echo "コンフリクトなし。何もしません。"
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git diff --name-only --diff-filter=U > "$WORK/conflicts.txt"
+          if [ ! -s "$WORK/conflicts.txt" ]; then
+            echo "マージがコンフリクト以外の理由で失敗しました。" > "$WORK/FAILURE.md"
+            exit 1
+          fi
+          echo "コンフリクトしたファイル:"; cat "$WORK/conflicts.txt"
+
+          if grep -q '^\.github/workflows/' "$WORK/conflicts.txt"; then
+            echo "\`.github/workflows/\` 配下でコンフリクトが発生したため、自動解決しません。" > "$WORK/FAILURE.md"
+            exit 1
+          fi
+
+          # package-lock.json は LLM に触らせず、後で機械的に再生成する
+          grep -E '(^|/)package-lock\.json$' "$WORK/conflicts.txt" > "$WORK/lockfiles.txt" || true
+          grep -vE '(^|/)package-lock\.json$' "$WORK/conflicts.txt" > "$WORK/code-conflicts.txt" || true
+
+          # Claude に渡すコンテキスト（PR の意図と、ベース側で入った変更）
+          {
+            echo "# PR #$PR_NUMBER: $(jq -r .title "$RUNNER_TEMP/pr.json")"
+            echo
+            echo "ブランチ: \`$HEAD_REF\` ← ベース \`$BASE_REF\` をマージ中"
+            echo
+            echo "## PR の説明"
+            echo
+            jq -r '.body // ""' "$RUNNER_TEMP/pr.json"
+            echo
+            echo "## この PR の後にベースブランチへ入ったコミット"
+            echo
+            git log --format='- %h %s' HEAD..MERGE_HEAD
+            echo
+            echo "## この PR のコミット"
+            echo
+            git log --format='- %h %s' MERGE_HEAD..HEAD
+          } > "$WORK/context.md"
+
+          echo "needed=true" >> "$GITHUB_OUTPUT"
+          if [ -s "$WORK/code-conflicts.txt" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Claude がコンフリクトを解決
+        if: steps.merge.outputs.needed == 'true' && steps.merge.outputs.code == 'true'
+        uses: anthropics/claude-code-action@v1
+        env:
+          # OpenRouter 経由で Claude を呼ぶ（/api まで。/api/v1 にすると 404 になる）
+          ANTHROPIC_BASE_URL: https://openrouter.ai/api
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+        with:
+          # アクションの起動に必須な入力。実際の認証は上の ANTHROPIC_AUTH_TOKEN で行う
+          anthropic_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            あなたはリポジトリ ${{ github.repository }} の開発者です。
+            PR #${{ matrix.pr }} のブランチにベースブランチ `${{ steps.info.outputs.base }}` をマージしたところ、
+            コンフリクトが発生しました。git のマージは途中の状態です。
+
+            - PR の目的と、ベース側で入った変更の一覧: `.claude-conflict/context.md`
+            - 解決すべきファイル: `.claude-conflict/code-conflicts.txt`
+            - package-lock.json は後続のステップが再生成するので触らないこと
+
+            手順:
+            1. context.md を読み、両方の変更の意図を把握する。必要に応じて
+               `git log -p HEAD..MERGE_HEAD -- <file>`（ベース側の変更）や
+               `git log -p MERGE_HEAD..HEAD -- <file>`（PR 側の変更）で詳細を確認する。
+            2. 各ファイルのコンフリクトマーカー（<<<<<<< / ======= / >>>>>>>）を解消する。
+               - 原則として「両方の変更の意図を両立させる」こと。どちらか一方を丸ごと捨てない。
+               - ベース側でリネーム・API 変更があれば、PR 側のコードもそれに合わせる。
+               - コンフリクト箇所以外は、解決に必要な最小限の修正にとどめる。
+            3. 可能なら型チェック（`npx tsc --noEmit`）などで壊れていないか確認する。
+
+            ルール:
+            - git commit / git merge / git rebase / git checkout / git reset / git add / git push はしないこと
+              （git log / git show / git diff は可）。
+            - .github/workflows/ 配下は変更しないこと。
+            - 最後に `.claude-conflict/RESOLUTION.md` を作成し、
+              1 行目に、全て解決できたら `RESOLVED`、意図が読み取れず安全に解決できない場合は `GIVE_UP`（この単語のみ）、
+              2 行目を空行、3 行目以降にファイルごとの解決方針（日本語、Markdown、簡潔に）を書くこと。
+          claude_args: |
+            --max-turns 60
+            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash"
+
+      - name: 解決結果を確定
+        id: finalize
+        if: steps.merge.outputs.needed == 'true'
+        env:
+          CODE_CONFLICTS: ${{ steps.merge.outputs.code }}
+          BASE_REF: ${{ steps.info.outputs.base }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CODE_CONFLICTS" = "true" ]; then
+            if [ ! -f "$WORK/RESOLUTION.md" ]; then
+              printf 'GIVE_UP\n\n解決結果ファイルが生成されませんでした。\n' > "$WORK/RESOLUTION.md"
+            fi
+            verdict="$(head -n 1 "$WORK/RESOLUTION.md" | tr -d '[:space:]')"
+            tail -n +3 "$WORK/RESOLUTION.md" > "$WORK/resolution_body.md"
+            if [ "$verdict" != "RESOLVED" ]; then
+              { echo "Claude が自動解決を断念しました。"; echo; cat "$WORK/resolution_body.md"; } > "$WORK/FAILURE.md"
+              exit 1
+            fi
+          else
+            echo "package-lock.json のみのコンフリクトだったため、機械的に再生成しました。" > "$WORK/resolution_body.md"
+          fi
+
+          # .github/workflows への変更は破棄（マージ済みのインデックスの状態に戻す）
+          git checkout -- .github/workflows/ 2>/dev/null || true
+
+          # package-lock.json: ベース側を採用し、package.json に合わせて再生成
+          while read -r lock; do
+            [ -z "$lock" ] && continue
+            git checkout --theirs -- "$lock"
+            (cd "$(dirname "$lock")" && npm install --package-lock-only --ignore-scripts --no-audit --no-fund)
+          done < "$WORK/lockfiles.txt"
+
+          # マーカーの取り残しチェック
+          leftover=""
+          while read -r f; do
+            [ -f "$f" ] || continue
+            if grep -nE '^(<<<<<<<|>>>>>>>)( |$)' "$f" >/dev/null; then
+              leftover="$leftover $f"
+            fi
+          done < "$WORK/conflicts.txt"
+          if [ -n "$leftover" ]; then
+            echo "コンフリクトマーカーが残っています:$leftover" > "$WORK/FAILURE.md"
+            exit 1
+          fi
+
+          git add -A
+          if [ -n "$(git diff --name-only --diff-filter=U)" ]; then
+            echo "未解決のファイルが残っています。" > "$WORK/FAILURE.md"
+            exit 1
+          fi
+
+          git commit --no-edit \
+            -m "Merge origin/$BASE_REF into PR #$PR_NUMBER (conflicts resolved by Claude)" \
+            -m "$RESOLVER_TRAILER"
+
+          # 「機械的にマージした結果」と「実際の解決」の差分 = 人間が見るべき部分
+          git show --remerge-diff --format= HEAD > "$WORK/remerge.diff"
+
+      - name: ビルド確認
+        if: steps.merge.outputs.needed == 'true'
+        run: |
+          set -euo pipefail
+          if ! npm ci --no-audit --no-fund > "$WORK/build.log" 2>&1 || ! npm run build >> "$WORK/build.log" 2>&1; then
+            {
+              echo "解決後のビルドに失敗しました。"
+              echo
+              echo '```'
+              tail -n 60 "$WORK/build.log"
+              echo '```'
+            } > "$WORK/FAILURE.md"
+            exit 1
+          fi
+          # ビルド生成物などでワークツリーが汚れないようにする
+          git reset --hard HEAD
+          git clean -fd
+
+      - name: Claude が解決内容をレビュー
+        if: steps.merge.outputs.needed == 'true' && steps.merge.outputs.code == 'true'
+        uses: anthropics/claude-code-action@v1
+        env:
+          # OpenRouter 経由で Claude を呼ぶ（/api まで。/api/v1 にすると 404 になる）
+          ANTHROPIC_BASE_URL: https://openrouter.ai/api
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
+        with:
+          # アクションの起動に必須な入力。実際の認証は上の ANTHROPIC_AUTH_TOKEN で行う
+          anthropic_api_key: ${{ secrets.OPENROUTER_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            あなたは厳格なシニアレビュアーです。
+            PR #${{ matrix.pr }} のブランチにベースブランチ `${{ steps.info.outputs.base }}` をマージし、
+            別の Claude がコンフリクトを解決してマージコミット（HEAD）を作りました。
+
+            - PR の目的と、ベース側で入った変更の一覧: `.claude-conflict/context.md`
+            - 解決担当の説明: `.claude-conflict/resolution_body.md`
+            - 解決内容の差分: `.claude-conflict/remerge.diff`
+              （`git show --remerge-diff HEAD` の出力。git が機械的にマージした結果＝コンフリクトマーカー入り と、
+              実際にコミットされた内容の差分なので、ここが「人間の判断が入った部分」です）
+
+            必要に応じて `git show HEAD^1`（PR 側）/ `git show HEAD^2`（ベース側）や周辺コードも確認し、次の観点でレビューしてください:
+            - PR 側・ベース側どちらかの変更が失われていないか
+            - 両方の意図が両立しているか（ベース側のリネームや API 変更に PR 側が追従しているか）
+            - コンフリクト解決に無関係な変更が紛れ込んでいないか
+            - 明らかなバグ・構文エラー・秘密情報の混入がないか
+
+            結果を `.claude-conflict/REVIEW.md` に書いてください:
+            - 1 行目: 問題なければ `APPROVE`、問題があれば `REQUEST_CHANGES`（この単語のみ）
+            - 2 行目: 空行
+            - 3 行目以降: レビューコメント（日本語、Markdown、簡潔に）
+            ソースコードは変更しないでください。
+          claude_args: |
+            --max-turns 30
+            --allowedTools "Read,Glob,Grep,LS,Write,Bash"
+
+      - name: 判定に応じて push
+        if: steps.merge.outputs.needed == 'true'
+        env:
+          HEAD_REF: ${{ steps.info.outputs.head }}
+          CODE_CONFLICTS: ${{ steps.merge.outputs.code }}
+          AUTO_MERGE: ${{ steps.info.outputs.auto_merge }}
+          APPROVE_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          if [ "$CODE_CONFLICTS" = "true" ]; then
+            if [ ! -f "$WORK/REVIEW.md" ]; then
+              printf 'REQUEST_CHANGES\n\nレビュー結果ファイルが生成されませんでした。\n' > "$WORK/REVIEW.md"
+            fi
+            verdict="$(head -n 1 "$WORK/REVIEW.md" | tr -d '[:space:]')"
+            tail -n +3 "$WORK/REVIEW.md" > "$WORK/review_body.md"
+            if [ "$verdict" != "APPROVE" ]; then
+              {
+                echo "解決内容のレビューで問題が見つかったため、push しませんでした。"
+                echo
+                echo "### レビューコメント"
+                echo
+                cat "$WORK/review_body.md"
+              } > "$WORK/FAILURE.md"
+              exit 1
+            fi
+          else
+            echo "（package-lock.json の再生成のみのため、レビューは省略）" > "$WORK/review_body.md"
+          fi
+
+          # Claude のステップでワークツリーが汚れていても、コミット済みの状態だけを push する
+          git reset --hard HEAD
+          # force push はしない（解決中に PR ブランチが進んでいたら失敗させる）
+          if ! git push "https://x-access-token:${PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$HEAD_REF"; then
+            echo "push に失敗しました（解決中にブランチが更新された、またはトークンに workflows 権限がない可能性があります）。" > "$WORK/FAILURE.md"
+            exit 1
+          fi
+
+          {
+            echo "🤖 ベースブランチとのコンフリクトを自動解決しました（$(git rev-parse --short HEAD)）。"
+            echo
+            echo "### 解決方針"
+            echo
+            cat "$WORK/resolution_body.md"
+            echo
+            echo "### 解決内容のレビュー"
+            echo
+            cat "$WORK/review_body.md"
+            echo
+            echo "<details><summary>解決部分の差分（git show --remerge-diff）</summary>"
+            echo
+            echo '```diff'
+            head -c 50000 "$WORK/remerge.diff"
+            echo
+            echo '```'
+            echo
+            echo "</details>"
+            echo
+            echo "---"
+            echo "実行ログ: $RUN_URL"
+          } > "$RUNNER_TEMP/comment.md"
+          gh pr comment "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/comment.md"
+
+          # auto-merge 待ちの PR は、push で承認が古くなって止まることがあるので承認し直す
+          if [ "$AUTO_MERGE" = "true" ] && [ "$CODE_CONFLICTS" = "true" ]; then
+            GH_TOKEN="$APPROVE_TOKEN" gh pr review "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --approve \
+              --body "🤖 コンフリクト解決後の再承認（解決部分は自動レビュー済み）" || true
+          fi
+
+      - name: 失敗を通知
+        if: failure()
+        run: |
+          {
+            echo "🤖 コンフリクトを自動解決できませんでした。人間の対応が必要です。"
+            echo
+            if [ -f "$WORK/FAILURE.md" ]; then cat "$WORK/FAILURE.md"; else echo "予期しないエラーが発生しました。"; fi
+            if [ -s "$WORK/remerge.diff" ]; then
+              echo
+              echo "<details><summary>Claude による解決案（未 push）</summary>"
+              echo
+              echo '```diff'
+              head -c 40000 "$WORK/remerge.diff"
+              echo
+              echo '```'
+              echo
+              echo "</details>"
+            fi
+            echo
+            echo "---"
+            echo "実行ログ: $RUN_URL"
+            echo
+            echo "解決後に再度自動解決させたい場合は \`needs-human\` を外し、\`resolve-conflicts\` ラベルを付けてください。"
+          } > "$RUNNER_TEMP/failure.md"
+          gh pr comment "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/failure.md" || true
+          gh pr edit "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --add-label needs-human || true
+
+      - name: resolve-conflicts ラベルを外す
+        if: always()
+        run: gh pr edit "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --remove-label resolve-conflicts 2>/dev/null || true
