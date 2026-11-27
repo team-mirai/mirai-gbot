@@ -121,18 +121,38 @@ body {
 
 .message {
   display: flex;
+  gap: 8px;
+  max-width: 85%;
+}
+
+.message-body {
+  display: flex;
   flex-direction: column;
   gap: 4px;
-  max-width: 85%;
+  min-width: 0;
 }
 
 .message.user {
   align-self: flex-end;
+}
+
+.message.user .message-body {
   align-items: flex-end;
 }
 
 .message.assistant {
   align-self: flex-start;
+}
+
+/* ボットのキャラクターアイコン */
+.avatar {
+  flex: none;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--bg-base);
+  border: 1px solid var(--color-neutral-solid-gray-200);
+  object-fit: cover;
 }
 
 .message-label {

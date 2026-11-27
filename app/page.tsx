@@ -82,16 +82,22 @@ export default function Home() {
               key={i}
               className={`message ${m.role}${m.error ? " error" : ""}`}
             >
-              <span className="message-label">
-                {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
-              </span>
-              <div className="bubble" role={m.error ? "alert" : undefined}>
-                {m.role === "assistant" && m.content && !m.error ? (
-                  <Markdown text={m.content} />
-                ) : (
-                  m.content ||
-                  (loading ? <span className="typing">回答を作成中…</span> : "")
-                )}
+              {m.role === "assistant" && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img className="avatar" src="/bot-avatar.png" alt="" width={40} height={40} />
+              )}
+              <div className="message-body">
+                <span className="message-label">
+                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+                </span>
+                <div className="bubble" role={m.error ? "alert" : undefined}>
+                  {m.role === "assistant" && m.content && !m.error ? (
+                    <Markdown text={m.content} />
+                  ) : (
+                    m.content ||
+                    (loading ? <span className="typing">回答を作成中…</span> : "")
+                  )}
+                </div>
               </div>
             </div>
           ))}
