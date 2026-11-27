@@ -474,6 +474,7 @@ body {
 
 .text-field::placeholder {
   color: var(--color-neutral-solid-gray-420);
+  text-overflow: ellipsis;
 }
 
 .text-field:hover:not(:disabled) {

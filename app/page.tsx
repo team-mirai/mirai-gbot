@@ -13,6 +13,18 @@ type Mode = "chat" | "support";
 
 const SUPPORT_START = "使える支援制度を探したいです。";
 
+// トップの質問欄のプレースホルダーに順番に表示する質問の例。
+// どんなことを聞けばよいかの手がかりになるよう、身近な行政手続きを選んでいる。
+const EXAMPLE_QUESTIONS = [
+  "引っ越したときに必要な手続きは？",
+  "児童手当の申請方法を教えて",
+  "マイナンバーカードの作り方は？",
+  "パスポートの更新に必要なものは？",
+  "確定申告が必要なのはどんな人？",
+  "国民健康保険の保険料を減らせる？",
+];
+const PLACEHOLDER_INTERVAL_MS = 4000;
+
 // 文字サイズ（html 要素の data-font-size 属性で切り替え。DADS の文字サイズは rem 指定なので追従する）
 const FONT_SIZES = [
   { value: "normal", label: "標準" },
@@ -69,6 +81,7 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [greeting, setGreeting] = useState(0);
+  const [exampleIndex, setExampleIndex] = useState(0);
   const [mode, setMode] = useState<Mode>("chat");
   const [furigana, setFurigana] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>("normal");
@@ -104,6 +117,16 @@ export default function Home() {
       speech.start();
     }
   }
+
+  // トップ画面で入力が空のあいだだけ、質問例を一定間隔で切り替える
+  useEffect(() => {
+    if (inChat || input || loading) return;
+    const id = setInterval(
+      () => setExampleIndex((i) => (i + 1) % EXAMPLE_QUESTIONS.length),
+      PLACEHOLDER_INTERVAL_MS,
+    );
+    return () => clearInterval(id);
+  }, [inChat, input, loading]);
 
   // 保存済みの設定を復元（SSR とのずれを避けるためマウント後に読む）
   useEffect(() => {
@@ -322,7 +345,7 @@ export default function Home() {
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
                   placeholder={
-                    speech.listening ? "お話しください…" : "例：引っ越したら何をすればいい？"
+                    speech.listening ? "お話しください…" : `例：${EXAMPLE_QUESTIONS[exampleIndex]}`
                   }
                   autoFocus
                   autoComplete="off"
