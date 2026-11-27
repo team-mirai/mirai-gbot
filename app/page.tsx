@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useRef, useState } from "react";
+import { GuideDialog } from "./GuideDialog";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
@@ -22,6 +23,8 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
   const bottomRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const guideRef = useRef<HTMLDialogElement>(null);
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
   const speech = useSpeechRecognition((transcript) => {
@@ -51,6 +54,22 @@ export default function Home() {
     if (loading) return;
     setMode("support");
     send(SUPPORT_START, [], "support");
+  }
+
+  function openGuide() {
+    guideRef.current?.showModal();
+  }
+
+  function closeGuide() {
+    guideRef.current?.close();
+  }
+
+  // 「できること」の質問例を入力欄に入れる（送信は利用者が行う）
+  function pickExample(question: string) {
+    closeGuide();
+    if (loading) return;
+    setInput(question);
+    inputRef.current?.focus();
   }
 
   function resetChat() {
@@ -116,16 +135,21 @@ export default function Home() {
               行政手続きや公的制度についての疑問に答える、行政相談用のチャットボットです。
             </p>
           )}
-          {messages.length > 0 && (
-            <button
-              type="button"
-              className="header-button"
-              onClick={resetChat}
-              disabled={loading}
-            >
-              最初に戻る
+          <div className="header-actions">
+            <button type="button" className="header-button" onClick={openGuide}>
+              できること
             </button>
-          )}
+            {messages.length > 0 && (
+              <button
+                type="button"
+                className="header-button"
+                onClick={resetChat}
+                disabled={loading}
+              >
+                最初に戻る
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -151,6 +175,9 @@ export default function Home() {
                   </button>
                 ))}
               </div>
+              <button type="button" className="link-button" onClick={openGuide}>
+                できること・使い方の一覧を見る
+              </button>
               <button type="button" className="mode-button" onClick={startSupport}>
                 使える支援制度を探す
               </button>
@@ -194,6 +221,7 @@ export default function Home() {
           </label>
           <input
             id="message-input"
+            ref={inputRef}
             className="text-field"
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -236,6 +264,7 @@ export default function Home() {
           </button>
         </div>
       </form>
+      <GuideDialog ref={guideRef} onClose={closeGuide} onPickExample={pickExample} />
       {speech.error && (
         <p className="voice-error" role="alert">
           {speech.error}

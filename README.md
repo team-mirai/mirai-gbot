@@ -24,6 +24,7 @@ http://localhost:3000 を開きます。
 ## 構成
 
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）
+- `app/GuideDialog.tsx` — 「できること・使い方」の一覧（相談できる分野と質問例・できないこと・注意事項）を表示するダイアログ。ヘッダーの「できること」ボタンと最初の画面のリンクから開きます。質問例を押すと入力欄に入ります。内容は `app/api/chat/route.ts` のシステムプロンプトの対応範囲と揃えてください
 - `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による日本語の音声入力。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
