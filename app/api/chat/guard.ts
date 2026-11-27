@@ -2,12 +2,18 @@
 
 export type ChatMessage = { role: "user" | "assistant"; content: string };
 
+function envInt(name: string, fallback: number): number {
+  const v = Number.parseInt(process.env[name] ?? "", 10);
+  return Number.isFinite(v) && v >= 0 ? v : fallback;
+}
+
 // 入力サイズの上限（API キーの使い込み・巨大入力によるコスト増を防ぐ）
+// 環境変数で変更できる（README の「不正利用・コスト対策」参照）
 export const LIMITS = {
   bodyBytes: 64 * 1024, // リクエスト本文
-  messages: 20, // 会話履歴の件数（これより古いものは切り捨てる）
-  messageChars: 2000, // 1 メッセージの文字数
-  totalChars: 12000, // 履歴全体の文字数
+  messages: Math.max(1, envInt("MAX_HISTORY_MESSAGES", 20)), // 会話履歴の件数（これより古いものは切り捨てる）
+  messageChars: Math.max(1, envInt("MAX_INPUT_CHARS", 2000)), // 1 メッセージの文字数
+  totalChars: Math.max(1, envInt("MAX_HISTORY_CHARS", 12000)), // 履歴全体の文字数
 };
 
 type Parsed = { ok: true; messages: ChatMessage[] } | { ok: false; error: string };
@@ -77,28 +83,62 @@ export function clientIp(req: Request): string {
   );
 }
 
-// IP ごとの簡易レート制限（固定ウィンドウ / 1 分）。
-// サーバーレスではインスタンスごとのメモリなので完全ではない。
+// IP ごとの簡易レート制限（固定ウィンドウ / 1 分あたり・1 日あたり）。
+// サーバーレスではインスタンスごとのメモリなので完全ではない（上限は目安）。
 // 本番では Vercel Firewall のレート制限ルールや OpenRouter キーの利用上限も併用すること。
-const PER_MINUTE = Number(process.env.RATE_LIMIT_PER_MINUTE ?? "10");
-const WINDOW_MS = 60_000;
-const hits = new Map<string, { count: number; reset: number }>();
+const PER_MINUTE = envInt("RATE_LIMIT_PER_MINUTE", 10); // 0 で無効
+const PER_DAY = envInt("RATE_LIMIT_PER_DAY", 100); // 0 で無効
+const MINUTE_MS = 60_000;
+const DAY_MS = 24 * 60 * MINUTE_MS;
+const MAX_KEYS = 10_000;
 
-export function rateLimit(key: string): { ok: true } | { ok: false; retryAfter: number } {
-  if (!(PER_MINUTE > 0)) return { ok: true }; // 0 以下で無効
-  const now = Date.now();
-  if (hits.size > 10_000) {
-    for (const [k, v] of hits) if (v.reset <= now) hits.delete(k);
+type Window = { count: number; reset: number };
+const hits = new Map<string, { minute: Window; day: Window }>();
+
+export type RateLimitResult =
+  | { ok: true }
+  | { ok: false; retryAfter: number; message: string };
+
+export function rateLimit(key: string, now = Date.now()): RateLimitResult {
+  if (!(PER_MINUTE > 0) && !(PER_DAY > 0)) return { ok: true };
+  if (hits.size > MAX_KEYS) {
+    for (const [k, v] of hits) if (v.day.reset <= now) hits.delete(k);
+    // それでも多すぎる場合は古いものから削除（メモリ枯渇対策）
+    for (const k of hits.keys()) {
+      if (hits.size <= MAX_KEYS) break;
+      hits.delete(k);
+    }
   }
-  const entry = hits.get(key);
-  if (!entry || entry.reset <= now) {
-    hits.set(key, { count: 1, reset: now + WINDOW_MS });
-    return { ok: true };
+
+  let entry = hits.get(key);
+  if (!entry) {
+    entry = {
+      minute: { count: 0, reset: now + MINUTE_MS },
+      day: { count: 0, reset: now + DAY_MS },
+    };
+    hits.set(key, entry);
   }
-  if (entry.count >= PER_MINUTE) {
-    return { ok: false, retryAfter: Math.ceil((entry.reset - now) / 1000) };
+  if (entry.minute.reset <= now) entry.minute = { count: 0, reset: now + MINUTE_MS };
+  if (entry.day.reset <= now) entry.day = { count: 0, reset: now + DAY_MS };
+
+  if (PER_DAY > 0 && entry.day.count >= PER_DAY) {
+    return {
+      ok: false,
+      retryAfter: Math.ceil((entry.day.reset - now) / 1000),
+      message:
+        "本日の利用上限に達しました。申し訳ありませんが、時間をおいて明日以降に再度お試しください。",
+    };
   }
-  entry.count++;
+  if (PER_MINUTE > 0 && entry.minute.count >= PER_MINUTE) {
+    const sec = Math.ceil((entry.minute.reset - now) / 1000);
+    return {
+      ok: false,
+      retryAfter: sec,
+      message: `短時間に多くのリクエストがありました。${sec} 秒ほど待ってから再度お試しください。`,
+    };
+  }
+  entry.minute.count++;
+  entry.day.count++;
   return { ok: true };
 }
 
