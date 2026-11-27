@@ -1,0 +1,242 @@
+# ソフトウェアファクトリー:
+#   Issue に `ready` ラベルが付く
+#     → Claude が実装してプルリクエストを作成 (implement)
+#     → 別の Claude がレビューし、問題なければ承認してマージ (review-and-merge)
+#
+# 必要な設定は docs/software-factory.md を参照。
+name: Claude Software Factory
+
+on:
+  issues:
+    types: [labeled]
+
+# 同じ Issue に対する実行は 1 本だけ（ラベルの付け外しで多重起動しない）
+concurrency:
+  group: claude-factory-issue-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  implement:
+    # `ready` ラベルが付いた Issue だけ（PR には反応しない）
+    if: github.event.label.name == 'ready' && github.event.issue.pull_request == null
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    outputs:
+      pr_number: ${{ steps.pr.outputs.pr_number }}
+    env:
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_TITLE: ${{ github.event.issue.title }}
+      BRANCH: claude/issue-${{ github.event.issue.number }}
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      # PR を作るトークン。FACTORY_GH_TOKEN (PAT / GitHub App) があればそれを使う。
+      # GITHUB_TOKEN で作った PR は他のワークフロー(CI)を起動せず、
+      # 同じ github-actions[bot] では自分の PR を承認できないため。
+      GH_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+    steps:
+      - name: ラベル準備 & 着手コメント
+        run: |
+          gh label create claude-working --color FBCA04 --description "Claude が作業中" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh label create needs-human --color D93F0B --description "人間の確認が必要" -R "$GITHUB_REPOSITORY" 2>/dev/null || true
+          gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --add-label claude-working
+          gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body "🤖 Claude が実装を開始しました: $RUN_URL"
+
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Claude 自身には push させない（コミット/プッシュは後続のステップで行う）
+          persist-credentials: false
+
+      - name: Claude が実装
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            あなたはリポジトリ ${{ github.repository }} の開発者です。
+            次の GitHub Issue #${{ github.event.issue.number }} を実装してください。
+
+            <issue_title>
+            ${{ github.event.issue.title }}
+            </issue_title>
+            <issue_body>
+            ${{ github.event.issue.body }}
+            </issue_body>
+
+            ルール:
+            - まずリポジトリの構成と CLAUDE.md / README を読み、既存の規約に従うこと。
+            - Issue の要件を満たす最小限で丁寧な変更を行うこと。
+            - テストやリンターがあれば実行し、通る状態にすること。
+            - git commit / git push / PR 作成はしないこと（後続のステップが行う）。
+            - .github/workflows/ 配下は変更しないこと。
+            - 最後に、リポジトリ直下に PR_BODY.md を作成し、
+              1 行目に PR タイトル（日本語、70 文字以内）、
+              2 行目を空行、3 行目以降に変更内容の概要・テスト方法・懸念点を Markdown で書くこと。
+            - 要件が曖昧で実装できない場合は、コードを変更せず PR_BODY.md の 1 行目を
+              `BLOCKED` にし、3 行目以降に確認したい点を書くこと。
+          claude_args: |
+            --max-turns 80
+            --allowedTools "Read,Write,Edit,MultiEdit,Glob,Grep,LS,Bash"
+
+      - name: コミット & プッシュ & PR 作成
+        id: pr
+        run: |
+          set -euo pipefail
+
+          if [ ! -f PR_BODY.md ]; then
+            printf '%s\n\n%s\n' "$ISSUE_TITLE" "Claude による自動実装です。" > PR_BODY.md
+          fi
+          mv PR_BODY.md "$RUNNER_TEMP/pr_body.md"
+          TITLE="$(head -n 1 "$RUNNER_TEMP/pr_body.md")"
+          tail -n +3 "$RUNNER_TEMP/pr_body.md" > "$RUNNER_TEMP/pr_body_rest.md"
+
+          if [ "$TITLE" = "BLOCKED" ]; then
+            gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/pr_body_rest.md"
+            gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --remove-label ready --add-label needs-human
+            echo "Claude が実装をブロックしました"; exit 0
+          fi
+
+          if [ -z "$(git status --porcelain)" ]; then
+            gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body "🤖 変更が発生しなかったため PR は作成しませんでした: $RUN_URL"
+            gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --add-label needs-human
+            exit 0
+          fi
+
+          # .github/workflows の変更は弾く（ワークフロー改ざん防止）
+          if git status --porcelain | grep -q '\.github/workflows/'; then
+            git checkout -- .github/workflows/ 2>/dev/null || true
+            git clean -fd .github/workflows/ 2>/dev/null || true
+          fi
+
+          git config user.name "claude-factory[bot]"
+          git config user.email "claude-factory[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add -A
+          git commit -m "$TITLE" -m "Closes #$ISSUE_NUMBER"
+          git push --force "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/heads/$BRANCH"
+
+          printf '%s\n\nCloses #%s\n\n---\n🤖 Claude Software Factory により自動生成: %s\n' \
+            "$(cat "$RUNNER_TEMP/pr_body_rest.md")" "$ISSUE_NUMBER" "$RUN_URL" > "$RUNNER_TEMP/pr_body_final.md"
+
+          PR_NUMBER="$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number -q '.[0].number')"
+          if [ -z "$PR_NUMBER" ]; then
+            gh pr create -R "$GITHUB_REPOSITORY" --base "$BASE_BRANCH" --head "$BRANCH" \
+              --title "$TITLE" --body-file "$RUNNER_TEMP/pr_body_final.md"
+            PR_NUMBER="$(gh pr list -R "$GITHUB_REPOSITORY" --head "$BRANCH" --state open --json number -q '.[0].number')"
+          else
+            gh pr edit "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --title "$TITLE" --body-file "$RUNNER_TEMP/pr_body_final.md"
+          fi
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body "🤖 PR #$PR_NUMBER を作成しました。自動レビューに進みます。"
+
+      - name: 作業中ラベルを外す
+        if: always()
+        run: gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --remove-label claude-working || true
+
+      - name: 失敗を通知
+        if: failure()
+        run: |
+          gh issue comment "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --body "🤖 実装中にエラーが発生しました: $RUN_URL"
+          gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --add-label needs-human || true
+
+  review-and-merge:
+    needs: implement
+    if: needs.implement.outputs.pr_number != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    env:
+      PR_NUMBER: ${{ needs.implement.outputs.pr_number }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      BRANCH: claude/issue-${{ github.event.issue.number }}
+      BASE_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: claude/issue-${{ github.event.issue.number }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Claude がレビュー
+        uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ github.token }}
+          prompt: |
+            あなたは厳格なシニアレビュアーです。
+            PR #${{ needs.implement.outputs.pr_number }} は Issue #${{ github.event.issue.number }} を実装したものです。
+
+            <issue_title>
+            ${{ github.event.issue.title }}
+            </issue_title>
+            <issue_body>
+            ${{ github.event.issue.body }}
+            </issue_body>
+
+            `git diff origin/${{ github.event.repository.default_branch }}...HEAD` で差分を確認し、必要に応じて周辺コードも読んでください。
+            次の観点でレビューしてください:
+            - Issue の要件を満たしているか
+            - バグ・エッジケースの見落とし
+            - セキュリティ上の問題（秘密情報の混入、インジェクション等）
+            - テストがあれば実行して通るか
+
+            結果をリポジトリ直下の REVIEW_RESULT.md に書いてください:
+            - 1 行目: マージして問題なければ `APPROVE`、修正が必要なら `REQUEST_CHANGES`（この単語のみ）
+            - 2 行目: 空行
+            - 3 行目以降: レビューコメント（日本語、Markdown）
+            ソースコードは変更しないでください。
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Read,Glob,Grep,LS,Write,Bash"
+
+      - name: 判定に応じて承認 & マージ
+        env:
+          # 承認は PR 作成者と別アカウントで行う必要があるため GITHUB_TOKEN を使う
+          APPROVE_TOKEN: ${{ github.token }}
+          MERGE_TOKEN: ${{ secrets.FACTORY_GH_TOKEN || github.token }}
+        run: |
+          set -euo pipefail
+          if [ ! -f REVIEW_RESULT.md ]; then
+            printf 'REQUEST_CHANGES\n\nレビュー結果ファイルが生成されませんでした。\n' > REVIEW_RESULT.md
+          fi
+          VERDICT="$(head -n 1 REVIEW_RESULT.md | tr -d '[:space:]')"
+          tail -n +3 REVIEW_RESULT.md > "$RUNNER_TEMP/review_body.md"
+          echo "verdict=$VERDICT"
+
+          if [ "$VERDICT" != "APPROVE" ]; then
+            GH_TOKEN="$APPROVE_TOKEN" gh pr review "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --request-changes --body-file "$RUNNER_TEMP/review_body.md" \
+              || GH_TOKEN="$APPROVE_TOKEN" gh pr comment "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review_body.md"
+            GH_TOKEN="$MERGE_TOKEN" gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --add-label needs-human
+            echo "自動レビューで修正が必要と判定されたため、マージしません"
+            exit 0
+          fi
+
+          if ! GH_TOKEN="$APPROVE_TOKEN" gh pr review "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --approve --body-file "$RUNNER_TEMP/review_body.md"; then
+            echo "::warning::承認に失敗しました（PR 作成者と承認者が同じ可能性。FACTORY_GH_TOKEN を設定してください）"
+            GH_TOKEN="$APPROVE_TOKEN" gh pr comment "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --body-file "$RUNNER_TEMP/review_body.md"
+          fi
+
+          # CI 必須の場合は auto-merge（CI 通過後にマージ）。auto-merge 未設定なら即マージ。
+          GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --squash --delete-branch --auto \
+            || GH_TOKEN="$MERGE_TOKEN" gh pr merge "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --squash --delete-branch
+
+      - name: 失敗を通知
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          gh pr comment "$PR_NUMBER" -R "$GITHUB_REPOSITORY" --body "🤖 自動レビュー/マージでエラーが発生しました: $RUN_URL" || true
+          gh issue edit "$ISSUE_NUMBER" -R "$GITHUB_REPOSITORY" --add-label needs-human || true
