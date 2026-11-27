@@ -2,6 +2,8 @@
 
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
+import { ProfileDialog } from "./ProfileDialog";
+import { PROFILE_STORAGE_KEY, type Profile, sanitizeProfile } from "./profile";
 import { useSpeechRecognition } from "./useSpeechRecognition";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
@@ -21,6 +23,9 @@ export default function Home() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<Mode>("chat");
+  // 「わたしの状況」（端末内の localStorage にだけ保存する）
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
@@ -34,6 +39,26 @@ export default function Home() {
     } else {
       voiceBaseRef.current = input;
       speech.start();
+    }
+  }
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(PROFILE_STORAGE_KEY);
+      if (saved) setProfile(sanitizeProfile(JSON.parse(saved)));
+    } catch {
+      // 壊れたデータや localStorage が使えない環境では未登録として扱う
+    }
+  }, []);
+
+  function saveProfile(next: Profile | null) {
+    setProfile(next);
+    setProfileOpen(false);
+    try {
+      if (next) localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(next));
+      else localStorage.removeItem(PROFILE_STORAGE_KEY);
+    } catch {
+      // 保存できない環境でも、このページを開いている間は反映する
     }
   }
 
@@ -80,6 +105,7 @@ export default function Home() {
         body: JSON.stringify({
           messages: history.slice(-20).map(({ role, content }) => ({ role, content })),
           mode: currentMode,
+          ...(profile ? { profile } : {}),
         }),
       });
 
@@ -116,16 +142,26 @@ export default function Home() {
               行政手続きや公的制度についての疑問に答える、行政相談用のチャットボットです。
             </p>
           )}
-          {messages.length > 0 && (
+          <div className="header-actions">
             <button
               type="button"
               className="header-button"
-              onClick={resetChat}
-              disabled={loading}
+              onClick={() => setProfileOpen(true)}
+              aria-haspopup="dialog"
             >
-              最初に戻る
+              わたしの状況{profile ? "（登録済み）" : ""}
             </button>
-          )}
+            {messages.length > 0 && (
+              <button
+                type="button"
+                className="header-button"
+                onClick={resetChat}
+                disabled={loading}
+              >
+                最初に戻る
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -136,6 +172,11 @@ export default function Home() {
               <p>行政手続きや公的制度について、お気軽にご相談ください。</p>
               <p>
                 マイナンバー・氏名・住所・電話番号などの個人情報は入力しないでください。
+              </p>
+              <p className="note">
+                {profile
+                  ? "登録した「わたしの状況」を踏まえて回答します。"
+                  : "右上の「わたしの状況」に家族構成などを登録しておくと、あなたの状況に合わせて回答します（任意・この端末にだけ保存）。"}
               </p>
               <p className="empty-sub">例えば、こんな質問ができます。</p>
               <div className="examples">
@@ -236,6 +277,12 @@ export default function Home() {
           </button>
         </div>
       </form>
+      <ProfileDialog
+        open={profileOpen}
+        profile={profile}
+        onSave={saveProfile}
+        onClose={() => setProfileOpen(false)}
+      />
       {speech.error && (
         <p className="voice-error" role="alert">
           {speech.error}

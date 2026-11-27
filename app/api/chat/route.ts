@@ -7,6 +7,7 @@ import {
   rateLimit,
   safeCitationUrl,
 } from "./guard";
+import { type Profile, profilePrompt, sanitizeProfile } from "../../profile";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -126,8 +127,12 @@ function supportPrompt() {
   ];
 }
 
-function systemPrompt(mode: Mode) {
-  return (mode === "support" ? supportPrompt() : chatPrompt())
+function systemPrompt(mode: Mode, profile: Profile | null) {
+  return [
+    ...(mode === "support" ? supportPrompt() : chatPrompt()),
+    // 「わたしの状況」が登録されていれば添えて、回答を状況に合わせる
+    profile ? profilePrompt(profile) : "",
+  ]
     .filter(Boolean)
     .join("\n");
 }
@@ -192,6 +197,8 @@ export async function POST(req: Request) {
   const messages: ChatMessage[] = parsed.messages;
   const mode: Mode =
     (raw as { mode?: unknown }).mode === "support" ? "support" : "chat";
+  // 既知の項目・選択肢・文字数上限で検証したものだけ使う（不正な値は無視する）
+  const profile = sanitizeProfile((raw as { profile?: unknown }).profile);
 
   const upstream = await fetch(OPENROUTER_URL, {
     method: "POST",
@@ -209,7 +216,7 @@ export async function POST(req: Request) {
       reasoning: { effort: "low" },
       // 行政相談は個人情報を含みうるため、入力を学習・保存に使うプロバイダーへはルーティングしない
       provider: { data_collection: "deny" },
-      messages: [{ role: "system", content: systemPrompt(mode) }, ...messages],
+      messages: [{ role: "system", content: systemPrompt(mode, profile) }, ...messages],
       ...(WEB_SEARCH
         ? { plugins: [{ id: "web", include_domains: INCLUDE_DOMAINS }] }
         : {}),
