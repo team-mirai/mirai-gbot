@@ -385,7 +385,7 @@ export default function Home() {
               )}
               <div className="message-body">
                 <span className="message-label">
-                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "mirai-gbot"}
+                  {m.role === "user" ? "あなた" : m.error ? "エラー" : "ジボジボ"}
                 </span>
                 <div className="bubble" role={m.error ? "alert" : undefined}>
                   {m.role === "assistant" && m.content && !m.error ? (
