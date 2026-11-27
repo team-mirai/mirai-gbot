@@ -24,7 +24,7 @@ Issue に `ready` ラベル
 ## セットアップ
 
 1. **Secrets** (Settings → Secrets and variables → Actions)
-   - `ANTHROPIC_API_KEY`（必須）
+   - `OPENROUTER_API_KEY`（必須）: Claude は OpenRouter 経由（`ANTHROPIC_BASE_URL=https://openrouter.ai/api`）で呼び出します
    - `FACTORY_GH_TOKEN`（推奨）: PR を作成・マージする用の Fine-grained PAT または GitHub App トークン
      - 権限: Contents / Pull requests / Issues を Read and write
      - これが無いと `GITHUB_TOKEN` で PR を作ることになり、

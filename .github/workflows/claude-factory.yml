@@ -57,8 +57,13 @@ jobs:
 
       - name: Claude が実装
         uses: anthropics/claude-code-action@v1
+        env:
+          # OpenRouter 経由で Claude を呼ぶ（/api まで。/api/v1 にすると 404 になる）
+          ANTHROPIC_BASE_URL: https://openrouter.ai/api
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # アクションの起動に必須な入力。実際の認証は上の ANTHROPIC_AUTH_TOKEN で行う
+          anthropic_api_key: ${{ secrets.OPENROUTER_API_KEY }}
           github_token: ${{ github.token }}
           prompt: |
             あなたはリポジトリ ${{ github.repository }} の開発者です。
@@ -171,8 +176,13 @@ jobs:
 
       - name: Claude がレビュー
         uses: anthropics/claude-code-action@v1
+        env:
+          # OpenRouter 経由で Claude を呼ぶ（/api まで。/api/v1 にすると 404 になる）
+          ANTHROPIC_BASE_URL: https://openrouter.ai/api
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.OPENROUTER_API_KEY }}
         with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # アクションの起動に必須な入力。実際の認証は上の ANTHROPIC_AUTH_TOKEN で行う
+          anthropic_api_key: ${{ secrets.OPENROUTER_API_KEY }}
           github_token: ${{ github.token }}
           prompt: |
             あなたは厳格なシニアレビュアーです。
