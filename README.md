@@ -24,6 +24,7 @@ http://localhost:3000 を開きます。
 ## 構成
 
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）
+- `app/privacy/page.tsx` — 利用上の注意とプライバシー（入力内容の扱い・個人情報入力の注意・免責）の説明ページ。チャット画面のヘッダーと入力欄下の注意書きからリンク
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `anthropic/claude-opus-5.5`。環境変数 `OPENROUTER_MODEL` で変更できます
 - Web 検索: OpenRouter のモデル名に `:online` を付けて呼び出し、最新情報を検索した上で回答します。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）

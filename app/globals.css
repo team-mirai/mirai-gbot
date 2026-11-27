@@ -44,9 +44,23 @@ body {
 }
 
 .header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 16px;
-  font-weight: 600;
   border-bottom: 1px solid var(--border);
+}
+
+.header-title {
+  font-weight: 600;
+  color: inherit;
+  text-decoration: none;
+}
+
+.header-link {
+  font-size: 13px;
+  color: var(--link);
 }
 
 .messages {
@@ -175,4 +189,42 @@ body {
 .composer button:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.notice {
+  margin: 0;
+  padding: 0 16px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+.notice a,
+.doc a {
+  color: var(--link);
+}
+
+.doc {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  line-height: 1.7;
+}
+
+.doc h1 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+
+.doc h2 {
+  font-size: 16px;
+  margin: 24px 0 8px;
+}
+
+.doc ul {
+  padding-left: 1.4em;
+}
+
+.doc li {
+  margin-bottom: 8px;
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 
@@ -55,7 +56,12 @@ export default function Home() {
 
   return (
     <main className="container">
-      <header className="header">mirai-gbot</header>
+      <header className="header">
+        <span className="header-title">mirai-gbot</span>
+        <Link href="/privacy" className="header-link">
+          利用上の注意・プライバシー
+        </Link>
+      </header>
 
       <div className="messages">
         {messages.length === 0 && (
@@ -85,6 +91,10 @@ export default function Home() {
           送信
         </button>
       </form>
+      <p className="notice">
+        氏名・住所・マイナンバーなどの個人情報は入力しないでください。入力内容は回答生成のため外部の AI サービスに送信されます。AI の回答は誤っている可能性があるため、重要な内容は公式情報や窓口でご確認ください。{" "}
+        <Link href="/privacy">詳しく</Link>
+      </p>
     </main>
   );
 }
