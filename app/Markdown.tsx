@@ -1,4 +1,5 @@
 import { Fragment, ReactNode } from "react";
+import { FuriganaText } from "./Furigana";
 
 // チャット向けの軽量 Markdown レンダラー（外部依存なし・innerHTML 不使用）。
 // 対応: 段落 / 改行, 見出し(太字の行として表示), 箇条書き・番号付きリスト,
@@ -39,8 +40,8 @@ function renderInline(text: string, keyPrefix = ""): ReactNode[] {
   let i = 0;
   for (const m of text.matchAll(INLINE)) {
     const start = m.index ?? 0;
-    if (start > last) out.push(text.slice(last, start));
     const key = `${keyPrefix}${i++}`;
+    if (start > last) out.push(<FuriganaText key={`${key}t`} text={text.slice(last, start)} />);
     if (m[1]) {
       out.push(<code key={key}>{m[1].slice(1, -1)}</code>);
     } else if (m[2] && m[3]) {
@@ -64,7 +65,7 @@ function renderInline(text: string, keyPrefix = ""): ReactNode[] {
     }
     last = start + m[0].length;
   }
-  if (last < text.length) out.push(text.slice(last));
+  if (last < text.length) out.push(<FuriganaText key={`${keyPrefix}end`} text={text.slice(last)} />);
   return out;
 }
 
