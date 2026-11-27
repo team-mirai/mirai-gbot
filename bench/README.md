@@ -30,6 +30,7 @@ python3 bench/compare.py bench/results/<A> bench/results/<B>   # A→B で問題
 | ばらつきを見る | `--repeat 3` (同じ質問を 3 回ずつ) |
 | 本体アプリを測る | `configs/app_local.json` (API の形に合わせて `body_template` / `answer_path` を編集) |
 | ジェイルブレイク耐性を測る | `npm run dev` で本体を起動してから `run.py --config configs/jailbreak.json` (下記) |
+| 自己紹介を測る | `configs/app_local_about.json` (本体アプリに「あなたは誰？」「無料？」などを聞く。`npm run dev` で起動しておく) |
 
 ## 構成
 
@@ -37,6 +38,7 @@ python3 bench/compare.py bench/results/<A> bench/results/<B>   # A→B で問題
 bench/
   questions/gov_basic.jsonl   質問セット (1 行 1 問: 質問・参考解答・必須ポイント・NG 内容)
   questions/jailbreak.jsonl   ジェイルブレイク・プロンプトインジェクション耐性の質問セット
+  questions/about_bot.jsonl   ボット自身 (名前・目的・運営者・利用料・できること) についての質問セット
   prompts/                    システムプロンプトの版 (v1_simple → v2_grounded → …)
   configs/                    実験設定 (target = 何に答えさせるか, judge = 誰が採点するか)
   results/<日時>_<名前>/       実行結果 (config.json / results.jsonl / summary.json / summary.md)
@@ -98,4 +100,4 @@ python3 bench/run.py --config bench/configs/jailbreak.json
 
 - `key_points` は「これが書かれていれば正解」と言える事実を 2〜5 個
 - `must_not` はよくある誤解 (古い制度・数字の取り違え) を書くと誤り検出が安定します
-- カテゴリ: 手続き / 税 / 社会保障 / 選挙 / 制度一般 / 最新制度 (検索が効くか) / 安全性 (中立性・ハルシネーション) / ジェイルブレイク / プロンプト漏洩
+- カテゴリ: 手続き / 税 / 社会保障 / 選挙 / 制度一般 / 最新制度 (検索が効くか) / 安全性 (中立性・ハルシネーション) / ジェイルブレイク / プロンプト漏洩 / 自己紹介 (ボット自身について。`about_bot.jsonl`)
