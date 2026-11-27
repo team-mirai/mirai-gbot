@@ -27,6 +27,7 @@ http://localhost:3000 を開きます。
 - `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による日本語の音声入力。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
+- 振り仮名: 画面右上のスイッチで、漢字に振り仮名（HTML の `<ruby>` 要素）を付けて表示できます。読みは `app/api/furigana/route.ts` が形態素解析ライブラリ [kuromoji](https://github.com/takuyaa/kuromoji.js) で求めます（外部 API は使いません）
 - 支援制度を探す（AI インタビュー）: 最初の画面の「使える支援制度を探す」ボタンで開始。ボットが困りごと・世帯構成・市区町村・収入の目安などを一問ずつ聞き取り、利用できそうな給付・手当・減免・貸付・相談窓口を、申請先・期限・出典つきで一覧表示します。氏名や詳しい住所などの個人情報は聞きません。API には `mode: "support"` を付けて送り、専用のシステムプロンプトに切り替えます
 - Web 検索: OpenRouter の web プラグインで最新情報を検索した上で回答します。検索対象は政府・自治体の公式ドメイン（`go.jp` / `lg.jp` とそのサブドメイン）だけに限定しており、それ以外のサイトは検索・出典表示の対象になりません。対象ドメインは `SEARCH_ALLOWED_DOMAINS`（カンマ区切り）で変更できます。参照したページは回答末尾に出典として表示されます。`OPENROUTER_WEB_SEARCH=false` で無効化できます（検索 1 回あたり追加コストがかかります）
 

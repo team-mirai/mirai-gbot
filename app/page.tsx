@@ -1,8 +1,11 @@
 "use client";
 
-import { FormEvent, useEffect, useRef, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
+import { FuriganaContext, FuriganaText } from "./Furigana";
+
+const FURIGANA_KEY = "mirai-gbot:furigana";
 
 type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 // "chat": 通常の行政相談 / "support": 使える支援制度を探す（AI インタビュー）
@@ -67,9 +70,25 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [greeting, setGreeting] = useState(0);
   const [mode, setMode] = useState<Mode>("chat");
+  const [furigana, setFurigana] = useState(false);
   const [fontSize, setFontSize] = useState<FontSize>("normal");
   const [easyJapanese, setEasyJapanese] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
+
+  // 振り仮名の設定はブラウザごとに記憶する（読めない環境でも動作には影響しない）
+  useEffect(() => {
+    try {
+      if (localStorage.getItem(FURIGANA_KEY) === "on") setFurigana(true);
+    } catch {}
+  }, []);
+
+  function toggleFurigana() {
+    const next = !furigana;
+    setFurigana(next);
+    try {
+      localStorage.setItem(FURIGANA_KEY, next ? "on" : "off");
+    } catch {}
+  }
   const inChat = messages.length > 0;
   // 音声入力開始時点で入力欄にあったテキスト（認識結果はこの後ろに追記する）
   const voiceBaseRef = useRef("");
@@ -205,6 +224,36 @@ export default function Home() {
     </button>
   );
 
+  const furiganaToggle = (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={furigana}
+      className="furigana-toggle"
+      onClick={toggleFurigana}
+    >
+      <span className="furigana-toggle-label">
+        <ruby>
+          振<rp>(</rp><rt>ふ</rt><rp>)</rp>
+        </ruby>
+        り
+        <ruby>
+          仮名<rp>(</rp><rt>がな</rt><rp>)</rp>
+        </ruby>
+      </span>
+      <span className="furigana-toggle-track" aria-hidden="true">
+        <span className="furigana-toggle-thumb" />
+      </span>
+      <span className="furigana-toggle-state" aria-hidden="true">
+        {furigana ? "オン" : "オフ"}
+      </span>
+    </button>
+  );
+
+  const withFurigana = (node: ReactNode) => (
+    <FuriganaContext.Provider value={furigana}>{node}</FuriganaContext.Provider>
+  );
+
   // 表示設定（文字サイズ・やさしい日本語）。トップとチャット画面のヘッダー下に出す
   const settings = (
     <div className="settings">
@@ -236,14 +285,17 @@ export default function Home() {
   );
 
   if (!inChat) {
-    return (
-      <div className="landing">
+    return withFurigana(
+      <div className={`landing${furigana ? " furigana-on" : ""}`}>
         <div className="landing-notice">
-          AI がお答えする行政相談のご案内です。正式な手続きは各行政機関の窓口・公式サイトでご確認ください。
+          <FuriganaText text="AI がお答えする行政相談のご案内です。正式な手続きは各行政機関の窓口・公式サイトでご確認ください。" />
         </div>
 
         <header className="header">
-          <div className="header-inner">{brand}</div>
+          <div className="header-inner">
+            {brand}
+            {furiganaToggle}
+          </div>
           {settings}
         </header>
 
@@ -257,7 +309,7 @@ export default function Home() {
                 </span>
               </h1>
               <p className="hero-lead">
-                行政の手続きや制度について、何をお知りになりたいですか？
+                <FuriganaText text="行政の手続きや制度について、何をお知りになりたいですか？" />
               </p>
 
               <form className="ask" onSubmit={handleSubmit}>
@@ -305,12 +357,14 @@ export default function Home() {
               )}
 
               <div className="suggestions">
-                <p className="suggestions-label">よくある質問</p>
+                <p className="suggestions-label">
+                  <FuriganaText text="よくある質問" />
+                </p>
                 <ul>
                   {SUGGESTIONS.map((s) => (
                     <li key={s}>
                       <button type="button" className="chip" onClick={() => send(s)}>
-                        {s}
+                        <FuriganaText text={s} />
                       </button>
                     </li>
                   ))}
@@ -319,10 +373,10 @@ export default function Home() {
 
               <div className="support-cta">
                 <button type="button" className="support-button" onClick={startSupport}>
-                  使える支援制度を探す
+                  <FuriganaText text="使える支援制度を探す" />
                 </button>
                 <p>
-                  いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。
+                  <FuriganaText text="いくつかの質問にお答えいただくと、利用できそうな給付・手当・減免・相談窓口をご案内します。" />
                 </p>
               </div>
             </div>
@@ -330,13 +384,19 @@ export default function Home() {
 
           <section className="topics" aria-labelledby="topics-title">
             <div className="section-inner">
-              <h2 id="topics-title">テーマから探す</h2>
+              <h2 id="topics-title">
+                <FuriganaText text="テーマから探す" />
+              </h2>
               <ul className="topic-grid">
                 {TOPICS.map((t) => (
                   <li key={t.title}>
                     <button type="button" className="topic" onClick={() => send(t.q)}>
-                      <span className="topic-title">{t.title}</span>
-                      <span className="topic-desc">{t.desc}</span>
+                      <span className="topic-title">
+                        <FuriganaText text={t.title} />
+                      </span>
+                      <span className="topic-desc">
+                        <FuriganaText text={t.desc} />
+                      </span>
                       <span className="topic-arrow" aria-hidden="true">
                         →
                       </span>
@@ -350,21 +410,22 @@ export default function Home() {
 
         <footer className="footer">
           <div className="section-inner">
-            24 時間いつでも、日本語以外の言語でもご相談いただけます。
+            <FuriganaText text="24 時間いつでも、日本語以外の言語でもご相談いただけます。" />
             <br />
-            AI の回答には誤りが含まれる場合があります。個人情報は入力しないでください。
+            <FuriganaText text="AI の回答には誤りが含まれる場合があります。個人情報は入力しないでください。" />
           </div>
         </footer>
       </div>
     );
   }
 
-  return (
-    <div className="container">
+  return withFurigana(
+    <div className={`container${furigana ? " furigana-on" : ""}`}>
       <header className="header">
         <div className="header-inner chat-header">
           {brand}
           {mode === "support" && <span className="mode-badge">支援制度を探す</span>}
+          {furiganaToggle}
           <button type="button" className="button-secondary" onClick={reset} disabled={loading}>
             新しい相談
           </button>
@@ -387,14 +448,22 @@ export default function Home() {
                 <span className="message-label">
                   {m.role === "user" ? "あなた" : m.error ? "エラー" : "ジボジボ"}
                 </span>
-                <div className="bubble" role={m.error ? "alert" : undefined}>
-                  {m.role === "assistant" && m.content && !m.error ? (
-                    <Markdown text={m.content} />
-                  ) : (
-                    m.content ||
-                    (loading ? <span className="typing">回答を作成中…</span> : "")
-                  )}
-                </div>
+                {/* 生成中のメッセージは文字列が変わり続けるため、完了してから振り仮名を付ける */}
+                <FuriganaContext.Provider
+                  value={furigana && !(loading && i === messages.length - 1)}
+                >
+                  <div className="bubble" role={m.error ? "alert" : undefined}>
+                    {m.role === "assistant" && m.content && !m.error ? (
+                      <Markdown text={m.content} />
+                    ) : m.content ? (
+                      <FuriganaText text={m.content} />
+                    ) : loading ? (
+                      <span className="typing">回答を作成中…</span>
+                    ) : (
+                      ""
+                    )}
+                  </div>
+                </FuriganaContext.Provider>
               </div>
             </div>
           ))}
