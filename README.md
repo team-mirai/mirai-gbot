@@ -31,3 +31,9 @@ http://localhost:3000 を開きます。
 ## 自動開発（Claude Software Factory）
 
 Issue に `ready` ラベルを付けると、Claude が自動で実装 → PR 作成 → レビュー → マージまで行います。仕組みとセットアップ手順は [docs/software-factory.md](docs/software-factory.md) を参照してください。
+
+## ライセンス
+
+[GNU Affero General Public License v3.0 or later](LICENSE)（AGPL-3.0-or-later）で公開しています。
+
+AGPL のため、このソフトウェアを改変してネットワーク越しにサービスとして提供する場合は、利用者に対して改変後のソースコードを入手できる手段を提供する必要があります。
