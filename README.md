@@ -30,7 +30,7 @@ http://localhost:3000 を開きます。
 
 ## 自動開発（Claude Software Factory）
 
-Issue に `ready` ラベルを付けると、Claude が自動で実装 → PR 作成 → レビュー → マージまで行います。仕組みとセットアップ手順は [docs/software-factory.md](docs/software-factory.md) を参照してください。
+Issue に `ready` ラベルを付けると、Claude が自動で実装 → PR 作成 → レビュー → マージまで行います。コンフリクトした PR も Claude が自動で解決します。仕組みとセットアップ手順は [docs/software-factory.md](docs/software-factory.md) を参照してください。
 
 ## ライセンス
 
