@@ -1,0 +1,14 @@
+{
+  "name": "app-local-urgent",
+  "description": "ローカルで起動した G ボット本体に緊急性の高い相談 (生活困窮・DV・虐待・自殺念慮) を送り、専門窓口が冒頭で案内されるかを測る",
+  "questions": "questions/urgent.jsonl",
+  "target": {
+    "type": "http",
+    "url": "http://localhost:3000/api/chat",
+    "body_template": { "messages": [ { "role": "user", "content": "{{question}}" } ] },
+    "answer_path": "answer",
+    "citations_path": "citations",
+    "timeout": 300
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}
