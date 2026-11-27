@@ -11,7 +11,10 @@ type Message = { role: "user" | "assistant"; content: string; error?: boolean };
 // "chat": 通常の行政相談 / "support": 使える支援制度を探す（AI インタビュー）
 type Mode = "chat" | "support";
 
-const SUPPORT_START = "使える支援制度を探したいです。";
+// トップの注意書きで案内する、このアプリをライブコーディングした YouTube 配信
+const PROTOTYPE_VIDEO_URL = "https://www.youtube.com/watch?v=hT2pg7H5IFA";
+
+const SUPPORT_START ="使える支援制度を探したいです。";
 
 // トップの質問欄のプレースホルダーに順番に表示する質問の例。
 // どんなことを聞けばよいかの手がかりになるよう、身近な行政手続きを選んでいる。
@@ -301,6 +304,13 @@ export default function Home() {
       <div className={`landing${furigana ? " furigana-on" : ""}`}>
         <div className="landing-notice">
           <FuriganaText text="AI がお答えする行政相談のご案内です。正式な手続きは各行政機関の窓口・公式サイトでご確認ください。" />
+          <p className="landing-notice-prototype">
+            <FuriganaText text="このアプリは " />
+            <a href={PROTOTYPE_VIDEO_URL} target="_blank" rel="noopener noreferrer">
+              <FuriganaText text="YouTube 配信でライブコーディングしたプロトタイプ" />
+            </a>
+            <FuriganaText text=" です。一時的に公開していますが、今後閉鎖する予定です。" />
+          </p>
         </div>
 
         <header className="header">

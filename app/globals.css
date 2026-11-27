@@ -573,6 +573,26 @@ body {
   border-bottom: 1px solid var(--color-neutral-solid-gray-200);
 }
 
+.landing-notice-prototype {
+  margin: 4px 0 0;
+}
+
+/* DADS リンク（.md a と同じ見た目） */
+.landing-notice a {
+  color: var(--color-key-1000);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.landing-notice a:visited {
+  color: var(--color-primitive-magenta-900);
+}
+
+.landing-notice a:hover {
+  color: var(--key-active);
+  text-decoration-thickness: 3px;
+}
+
 .section-inner,
 .hero-inner {
   max-width: 1040px;
