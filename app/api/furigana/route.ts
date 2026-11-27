@@ -1,5 +1,6 @@
 import path from "node:path";
 import kuromoji from "kuromoji";
+import { isCrossSite } from "../chat/guard";
 
 export const runtime = "nodejs";
 
@@ -89,6 +90,9 @@ const MAX_TEXTS = 500;
 const MAX_CHARS = 50_000;
 
 export async function POST(req: Request) {
+  if (isCrossSite(req)) {
+    return new Response("許可されていない送信元です。", { status: 403 });
+  }
   let texts: unknown;
   try {
     ({ texts } = await req.json());
