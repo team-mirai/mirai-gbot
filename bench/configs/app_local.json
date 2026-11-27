@@ -1,0 +1,14 @@
+{
+  "name": "app-local",
+  "description": "ローカルで起動した G ボット本体 (next dev) を測る。API の形が決まったら body_template / answer_path を合わせる",
+  "questions": "questions/gov_basic.jsonl",
+  "target": {
+    "type": "http",
+    "url": "http://localhost:3000/api/chat",
+    "body_template": { "messages": [ { "role": "user", "content": "{{question}}" } ] },
+    "answer_path": "answer",
+    "citations_path": "citations",
+    "timeout": 300
+  },
+  "judge": { "model": "anthropic/claude-opus-5.5", "temperature": 0 }
+}
