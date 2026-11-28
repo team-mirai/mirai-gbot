@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import { Markdown } from "./Markdown";
 import { useSpeechRecognition } from "./useSpeechRecognition";
@@ -316,6 +317,9 @@ export default function Home() {
         <header className="header">
           <div className="header-inner">
             {brand}
+            <Link href="/privacy" className="header-link">
+              利用上の注意・プライバシー
+            </Link>
             {furiganaToggle}
           </div>
           {settings}
@@ -409,7 +413,8 @@ export default function Home() {
           <div className="section-inner">
             <FuriganaText text="24 時間いつでも、日本語以外の言語でもご相談いただけます。" />
             <br />
-            <FuriganaText text="AI の回答には誤りが含まれる場合があります。個人情報は入力しないでください。" />
+            <FuriganaText text="AI の回答には誤りが含まれる場合があります。個人情報は入力しないでください。" />{" "}
+            <Link href="/privacy">利用上の注意・プライバシー</Link>
           </div>
         </footer>
       </div>
@@ -422,6 +427,9 @@ export default function Home() {
         <div className="header-inner chat-header">
           {brand}
           {mode === "support" && <span className="mode-badge">支援制度を探す</span>}
+          <Link href="/privacy" className="header-link">
+            利用上の注意・プライバシー
+          </Link>
           {furiganaToggle}
           <button type="button" className="button-secondary" onClick={reset} disabled={loading}>
             新しい相談
@@ -518,6 +526,10 @@ export default function Home() {
           {speech.error}
         </p>
       )}
+      <p className="notice">
+        <FuriganaText text="氏名・住所・マイナンバーなどの個人情報は入力しないでください。入力内容は回答生成のため外部の AI サービスに送信されます。AI の回答は誤っている可能性があるため、重要な内容は公式情報や窓口でご確認ください。" />{" "}
+        <Link href="/privacy">詳しく</Link>
+      </p>
     </div>
   );
 }

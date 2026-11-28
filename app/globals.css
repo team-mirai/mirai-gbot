@@ -127,12 +127,33 @@ body {
   color: var(--text-description);
 }
 
+a.brand {
+  text-decoration: none;
+}
+
+.header-link {
+  margin-left: auto;
+  font-size: var(--font-size-14);
+  color: var(--color-key-1000);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.header-link:hover {
+  color: var(--key-active);
+}
+
 .chat-header {
   align-items: center;
 }
 
 .chat-header .button-secondary {
   margin-left: auto;
+}
+
+/* 右寄せはプライバシーリンクが担い、ふりがなスイッチ・「新しい相談」はその右に並べる */
+.header-link + .furigana-toggle {
+  margin-left: 0;
 }
 
 .mode-badge {
@@ -746,6 +767,11 @@ body {
   background: var(--color-neutral-solid-gray-900);
 }
 
+.footer a {
+  color: var(--color-neutral-white);
+  text-underline-offset: 3px;
+}
+
 /* トップ → チャットの切り替え */
 .container {
   animation: fade-up 0.3s ease-out;
@@ -773,6 +799,20 @@ body {
 
   .brand-name small {
     display: none;
+  }
+
+  .brand-name {
+    white-space: nowrap;
+  }
+
+  /* 狭い画面ではふりがなスイッチと並ぶと収まらないため省略する。
+     トップはフッター、チャット画面は入力欄下の「詳しく」から辿れる */
+  .header-link {
+    display: none;
+  }
+
+  .header-link + .furigana-toggle {
+    margin-left: auto;
   }
 }
 
@@ -834,6 +874,64 @@ button.mic.listening {
   padding: 0 16px;
   font-size: var(--font-size-14);
   color: var(--error);
+}
+
+/* 入力欄下の注意書き */
+.notice {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 0 16px 12px;
+  /* Dns-14N-130 */
+  font-size: var(--font-size-14);
+  line-height: var(--line-height-130);
+  color: var(--text-description);
+}
+
+.notice a,
+.doc a {
+  color: var(--color-key-1000);
+  text-underline-offset: 3px;
+}
+
+.notice a:hover,
+.doc a:hover {
+  color: var(--key-active);
+}
+
+/* 利用上の注意などの文書ページ */
+.doc {
+  flex: 1;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+.doc h1 {
+  margin: 0 0 24px;
+  /* Std-24B-150 */
+  font-size: 1.5rem;
+  font-weight: var(--font-weight-700);
+  line-height: var(--line-height-150);
+  color: var(--color-neutral-solid-gray-900);
+}
+
+.doc h2 {
+  margin: 32px 0 8px;
+  /* Std-20B-150 */
+  font-size: var(--font-size-20);
+  font-weight: var(--font-weight-700);
+  line-height: var(--line-height-150);
+  color: var(--color-neutral-solid-gray-900);
+}
+
+.doc ul {
+  padding-left: 1.4em;
+}
+
+.doc li {
+  margin-bottom: 8px;
 }
 
 .ask button.mic {

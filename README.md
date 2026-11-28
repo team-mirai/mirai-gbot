@@ -25,6 +25,7 @@ http://localhost:3000 を開きます。
 
 - `app/page.tsx` — チャット画面（クライアントコンポーネント）。画面上部で文字サイズ（標準・大・特大）と「やさしい日本語」モードを切り替えられます（設定はブラウザに保存）
 - `app/useSpeechRecognition.ts` — ブラウザの Web Speech API による日本語の音声入力。対応ブラウザ（Chrome・Edge・Safari など）でのみ入力欄にマイクボタンが表示されます
+- `app/privacy/page.tsx` — 利用上の注意とプライバシー（入力内容の扱い・個人情報入力の注意・免責）の説明ページ。チャット画面のヘッダーと入力欄下の注意書きからリンク
 - `app/api/chat/route.ts` — OpenRouter の Chat Completions API を呼び出し、テキストをストリーミング返却
 - モデル: 既定は `openai/gpt-6-luna`（安価なモデル。入力 $0.10 / 出力 $0.50 per 1M tokens）。環境変数 `OPENROUTER_MODEL` で変更できます
 - 振り仮名: 画面右上のスイッチで、漢字に振り仮名（HTML の `<ruby>` 要素）を付けて表示できます。読みは `app/api/furigana/route.ts` が形態素解析ライブラリ [kuromoji](https://github.com/takuyaa/kuromoji.js) で求めます（外部 API は使いません）
